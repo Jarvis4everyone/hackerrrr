@@ -22,6 +22,12 @@ cleanup() {
 # Set up trap to catch Ctrl+C
 trap cleanup SIGINT SIGTERM
 
+# Activate virtual environment if it exists
+if [ -d ".venv" ]; then
+    echo -e "${GREEN}Activating virtual environment...${NC}"
+    source .venv/bin/activate
+fi
+
 # Start Backend Server
 echo -e "${GREEN}Starting Backend Server...${NC}"
 python run.py &
