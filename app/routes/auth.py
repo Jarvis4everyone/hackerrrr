@@ -73,7 +73,11 @@ async def login(login_data: LoginRequest):
     logger.info(f"Login attempt - Username: {login_data.username}")
     logger.info(f"Expected username: {settings.AUTH_USERNAME}")
     logger.info(f"Username match: {login_data.username == settings.AUTH_USERNAME}")
+    logger.info(f"Password provided: {'YES' if login_data.password else 'NO'}")
+    logger.info(f"Password length: {len(login_data.password) if login_data.password else 0}")
     logger.info(f"Password match: {login_data.password == settings.AUTH_PASSWORD}")
+    logger.info(f"Settings AUTH_USERNAME: '{settings.AUTH_USERNAME}'")
+    logger.info(f"Settings AUTH_PASSWORD length: {len(settings.AUTH_PASSWORD) if settings.AUTH_PASSWORD else 0}")
     
     if login_data.username != settings.AUTH_USERNAME or login_data.password != settings.AUTH_PASSWORD:
         logger.warning(f"Login failed for username: {login_data.username}")
