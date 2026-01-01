@@ -63,13 +63,26 @@ app = FastAPI(
 )
 
 # Enable CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Handle CORS origins - if ["*"] is used, we can't use allow_credentials
+cors_origins = settings.CORS_ORIGINS
+if cors_origins == ["*"] or "*" in cors_origins:
+    # Allow all origins but without credentials
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    # Specific origins with credentials support
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # Include routers
 app.include_router(health.router)

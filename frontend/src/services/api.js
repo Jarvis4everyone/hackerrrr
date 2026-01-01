@@ -1,8 +1,26 @@
 import axios from 'axios'
 
-// Use environment variable for API URL, fallback to relative path for production
-const API_BASE_URL = import.meta.env.VITE_API_URL || 
-  (import.meta.env.PROD ? '' : 'http://localhost:8000')
+// Use environment variable for API URL
+// In production, if VITE_API_URL is not set, try to use the backend from same domain
+// or fallback to empty string for relative URLs
+let API_BASE_URL = import.meta.env.VITE_API_URL
+
+if (!API_BASE_URL) {
+  if (import.meta.env.PROD) {
+    // In production, try to construct backend URL from current host
+    // This assumes backend is on same domain or can be inferred
+    const host = window.location.hostname
+    // If on render.com, backend might be on different subdomain
+    // For now, use empty string to allow relative URLs or same-origin
+    API_BASE_URL = ''
+  } else {
+    // Development fallback
+    API_BASE_URL = 'http://localhost:8000'
+  }
+}
+
+// Remove trailing slash if present
+API_BASE_URL = API_BASE_URL.replace(/\/$/, '')
 
 const api = axios.create({
   baseURL: API_BASE_URL,
