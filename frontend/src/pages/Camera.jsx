@@ -350,18 +350,53 @@ const Camera = () => {
       pc.oniceconnectionstatechange = () => {
         console.log('[WebRTC] ICE connection state:', pc.iceConnectionState)
         if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
-          console.log('[WebRTC] ✅ ICE connection established!')
+          console.log('[WebRTC] ✅ ICE connection established! Media should flow now.')
+          console.log('[WebRTC] Connection state:', pc.connectionState)
+          console.log('[WebRTC] Signaling state:', pc.signalingState)
+          
+          // Check if we have tracks
+          const receivers = pc.getReceivers()
+          const videoReceivers = receivers.filter(r => r.track && r.track.kind === 'video')
+          console.log('[WebRTC] Video receivers after ICE connect:', videoReceivers.length)
+          videoReceivers.forEach((r, i) => {
+            const track = r.track
+            console.log(`[WebRTC] Receiver ${i} - enabled: ${track.enabled}, muted: ${track.muted}, readyState: ${track.readyState}`)
+          })
+          
           // Force video play when ICE connects
           if (videoRef.current && videoRef.current.srcObject) {
+            const tracks = videoRef.current.srcObject.getVideoTracks()
+            console.log('[WebRTC] Video element tracks:', tracks.length)
+            tracks.forEach((track, i) => {
+              console.log(`[WebRTC] Track ${i} - enabled: ${track.enabled}, muted: ${track.muted}, readyState: ${track.readyState}`)
+            })
+            
             setTimeout(() => {
               if (videoRef.current) {
+                videoRef.current.muted = false
                 videoRef.current.play().catch(console.error)
               }
             }, 100)
+          } else if (videoReceivers.length > 0) {
+            // Create stream from receivers if video element doesn't have one
+            console.log('[WebRTC] Creating stream from receivers after ICE connect')
+            const stream = new MediaStream(videoReceivers.map(r => r.track).filter(Boolean))
+            if (videoRef.current) {
+              videoRef.current.srcObject = stream
+              videoRef.current.muted = false
+              videoRef.current.play().catch(console.error)
+            }
           }
         } else if (pc.iceConnectionState === 'failed') {
           console.error('[WebRTC] ❌ ICE connection failed!')
+        } else if (pc.iceConnectionState === 'checking') {
+          console.log('[WebRTC] ICE connection checking...')
         }
+      }
+      
+      // Monitor signaling state
+      pc.onsignalingstatechange = () => {
+        console.log('[WebRTC] Signaling state:', pc.signalingState)
       }
       
       trackCheckInterval = setInterval(() => {
