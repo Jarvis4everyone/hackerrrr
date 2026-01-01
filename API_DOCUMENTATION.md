@@ -735,10 +735,41 @@ The server supports **WebRTC** for real-time streaming of camera, microphone, an
 
 1. **Server initiates stream** via API endpoint
 2. **Server sends `start_stream` message** to PC via WebSocket
-3. **PC creates WebRTC offer** and sends it to server
+3. **PC creates WebRTC offer** with TURN/STUN servers and sends it to server
 4. **Server creates answer** and sends it back to PC
 5. **PC and server exchange ICE candidates**
 6. **Connection established**, media starts flowing
+
+### TURN Server Support (NAT Traversal)
+
+For cloud deployments or when PCs are behind NAT/firewalls, **TURN servers are essential** for WebRTC to work properly. The system includes built-in support for Metered.ca's free TURN servers.
+
+**Automatic TURN Configuration:**
+- PC client (`pc_client_webrtc.py`) automatically fetches TURN credentials from Metered.ca
+- Frontend automatically fetches TURN credentials from Metered.ca
+- Backend automatically fetches TURN credentials from Metered.ca
+- Credentials are cached for 1 hour to reduce API calls
+- Falls back to STUN-only if TURN fetch fails
+
+**How It Works:**
+1. On first WebRTC connection, the client fetches TURN server credentials from:
+   ```
+   https://x1.metered.live/api/v1/turn/credentials?apiKey={API_KEY}
+   ```
+2. Returns a list of ICE servers (STUN + TURN) with credentials
+3. These are used to configure `RTCPeerConnection`
+4. TURN servers relay traffic when direct peer-to-peer connection fails
+
+**Environment Variables (Optional):**
+```bash
+# Custom Metered.ca API key (default: uses free tier)
+export METERED_API_KEY=your_api_key_here
+
+# Custom API endpoint (default: https://x1.metered.live/api/v1/turn/credentials)
+export METERED_API_URL=https://x1.metered.live/api/v1/turn/credentials
+```
+
+**Note:** The default configuration uses Metered.ca's free tier, which is sufficient for most use cases. For production deployments with high traffic, consider using a paid TURN service.
 
 ### Messages FROM Server TO PC
 
@@ -843,13 +874,67 @@ PC notifies server that stream is ready.
 
 ### Implementation Example
 
+**Using `pc_client_webrtc.py` (Recommended):**
+
+The provided `pc_client_webrtc.py` includes full TURN server support. Simply use it:
+
 ```python
+from pc_client_webrtc import PCClientWebRTC
+
+client = PCClientWebRTC(
+    server_url="wss://your-server.com",
+    pc_id="PC-001"
+)
+
+await client.connect()
+await client.listen()  # Handles all WebRTC automatically
+```
+
+**Manual Implementation (if building custom client):**
+
+```python
+import aiohttp
+from aiortc import RTCPeerConnection, RTCConfiguration, RTCIceServer
+
+# Fetch TURN server credentials
+async def get_ice_servers():
+    try:
+        api_url = "https://x1.metered.live/api/v1/turn/credentials?apiKey=4b7268b361c4e1a08789e6415026801bfb20"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(api_url) as response:
+                if response.status == 200:
+                    ice_servers_data = await response.json()
+                    # Convert to RTCIceServer objects
+                    ice_servers = []
+                    for server in ice_servers_data:
+                        urls = server.get('urls')
+                        if isinstance(urls, str):
+                            urls = [urls]
+                        ice_servers.append(RTCIceServer(
+                            urls=urls,
+                            username=server.get('username'),
+                            credential=server.get('credential')
+                        ))
+                    return ice_servers
+    except Exception as e:
+        print(f"Failed to fetch TURN credentials: {e}")
+    
+    # Fallback to STUN only
+    return [
+        RTCIceServer(urls=["stun:stun.l.google.com:19302"]),
+        RTCIceServer(urls=["stun:stun1.l.google.com:19302"]),
+    ]
+
 # When receiving start_stream message
 if message_type == "start_stream":
     stream_type = data.get("stream_type")
     
-    # Create peer connection
-    pc = RTCPeerConnection()
+    # Get ICE servers with TURN support
+    ice_servers = await get_ice_servers()
+    
+    # Create peer connection with TURN servers
+    configuration = RTCConfiguration(iceServers=ice_servers)
+    pc = RTCPeerConnection(configuration=configuration)
     
     # Get media track based on stream type
     if stream_type == "camera":
@@ -906,6 +991,11 @@ MediaPlayer("default", format="avfoundation")
 3. **Audio Chunks**: Microphone streams send continuous audio that is automatically recorded into 5-second chunks on the frontend. Each chunk can be played or downloaded individually.
 4. **Permissions**: Ensure camera/microphone permissions are granted
 5. **Platform Support**: Media access is platform-specific - adjust code accordingly
+6. **TURN Servers Required for Cloud**: When server is deployed on cloud (e.g., Render, AWS) and PC is behind NAT, TURN servers are **essential**. The provided `pc_client_webrtc.py` includes automatic TURN server support.
+7. **ICE Connection**: If ICE connection fails, check:
+   - TURN servers are configured (automatic in `pc_client_webrtc.py`)
+   - Firewall allows UDP traffic
+   - Network supports WebRTC (some corporate networks block it)
 
 ---
 
@@ -2666,6 +2756,8 @@ PC clients can use these environment variables:
 
 - `SERVER_URL`: WebSocket server URL (default: `ws://localhost:8000`)
 - `PC_ID`: Unique PC identifier (default: hostname)
+- `METERED_API_KEY`: (Optional) Metered.ca API key for TURN server credentials (default: uses free tier key)
+- `METERED_API_URL`: (Optional) Metered.ca API endpoint (default: `https://x1.metered.live/api/v1/turn/credentials`)
 
 **Example:**
 ```bash
@@ -2673,6 +2765,25 @@ export SERVER_URL=ws://192.168.1.100:8000
 export PC_ID=PC-001
 python client.py
 ```
+
+**For WebRTC Streaming (TURN Server Support):**
+
+The PC client automatically fetches TURN server credentials from Metered.ca to enable WebRTC streaming through NAT/firewalls. This is essential for cloud deployments where the server is on a different network.
+
+**Default Configuration:**
+- Uses free Metered.ca TURN servers
+- Automatically fetches credentials on first connection
+- Caches credentials for 1 hour
+- Falls back to STUN-only if TURN fetch fails
+
+**Custom TURN Server:**
+```bash
+export METERED_API_KEY=your_api_key_here
+export METERED_API_URL=https://x1.metered.live/api/v1/turn/credentials
+python pc_client_webrtc.py
+```
+
+**Note:** The PC client (`pc_client_webrtc.py`) includes built-in TURN server support. For basic script execution without streaming, you can use the simpler `example_client.py` which doesn't require TURN servers.
 
 ---
 
