@@ -2,7 +2,6 @@ import { useEffect, useState, useRef } from 'react'
 import { MonitorSpeaker, Play, Square, Monitor } from 'lucide-react'
 import { getPCs, startScreenStream, stopStream, getStreamStatus } from '../services/api'
 import { createPeerConnection } from '../utils/webrtc'
-import { createPeerConnection } from '../utils/webrtc'
 
 // Get API URL from environment or construct from current location
 let API_BASE_URL = import.meta.env.VITE_API_URL
