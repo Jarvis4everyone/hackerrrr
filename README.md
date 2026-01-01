@@ -70,7 +70,7 @@ Create a `.env` file with the following variables:
 ```env
 # Server Configuration
 HOST=0.0.0.0
-PORT=8000
+PORT=5000
 DEBUG=True
 
 # MongoDB Configuration
@@ -90,7 +90,7 @@ Or:
 python -m app.main
 ```
 
-The server will start on `http://localhost:8000` by default.
+The server will start on `http://localhost:5000` by default.
 
 ## Running the Frontend
 
@@ -114,9 +114,9 @@ npm run build
 ## API Endpoints
 
 ### WebSocket Connection
-- **Endpoint**: `ws://localhost:8000/ws/{pc_id}`
+- **Endpoint**: `ws://localhost:5000/ws/{pc_id}`
 - **Description**: Connect a PC to the server using WebSocket
-- **Example**: `ws://localhost:8000/ws/PC-001`
+- **Example**: `ws://localhost:5000/ws/PC-001`
 
 ### REST API Endpoints
 
@@ -148,29 +148,29 @@ npm run build
 
 **List connected PCs:**
 ```bash
-curl http://localhost:8000/api/pcs
+curl http://localhost:5000/api/pcs
 ```
 
 **Send a script to a specific PC:**
 ```bash
-curl -X POST "http://localhost:8000/api/scripts/send?pc_id=PC-001&script_name=screenshot.py"
+curl -X POST "http://localhost:5000/api/scripts/send?pc_id=PC-001&script_name=screenshot.py"
 ```
 
 **Send a script (using JSON body):**
 ```bash
-curl -X POST "http://localhost:8000/api/scripts/send" \
+curl -X POST "http://localhost:5000/api/scripts/send" \
   -H "Content-Type: application/json" \
-  -d '{"pc_id": "PC-001", "script_name": "screenshot.py", "server_url": "http://localhost:8000"}'
+  -d '{"pc_id": "PC-001", "script_name": "screenshot.py", "server_url": "http://localhost:5000"}'
 ```
 
 **Broadcast a script to all PCs:**
 ```bash
-curl -X POST "http://localhost:8000/api/scripts/broadcast?script_name=lock_pc.py"
+curl -X POST "http://localhost:5000/api/scripts/broadcast?script_name=lock_pc.py"
 ```
 
 **Get execution history:**
 ```bash
-curl http://localhost:8000/api/executions?limit=50
+curl http://localhost:5000/api/executions?limit=50
 ```
 
 ### Using Python requests
@@ -179,22 +179,22 @@ curl http://localhost:8000/api/executions?limit=50
 import requests
 
 # List connected PCs
-response = requests.get("http://localhost:8000/api/pcs")
+response = requests.get("http://localhost:5000/api/pcs")
 print(response.json())
 
 # Send script to PC
 response = requests.post(
-    "http://localhost:8000/api/scripts/send",
+    "http://localhost:5000/api/scripts/send",
     json={
         "pc_id": "PC-001",
         "script_name": "screenshot.py",
-        "server_url": "http://localhost:8000"
+        "server_url": "http://localhost:5000"
     }
 )
 print(response.json())
 
 # Get execution history for a PC
-response = requests.get("http://localhost:8000/api/executions/pc/PC-001")
+response = requests.get("http://localhost:5000/api/executions/pc/PC-001")
 print(response.json())
 ```
 
@@ -214,7 +214,7 @@ The server uses the following MongoDB collections:
     "type": "script",
     "script_name": "screenshot.py",
     "script_content": "# Python script content...",
-    "server_url": "http://localhost:8000",
+    "server_url": "http://localhost:5000",
     "execution_id": "507f1f77bcf86cd799439011"
 }
 ```
@@ -239,7 +239,7 @@ The server uses the following MongoDB collections:
 ## Client Implementation
 
 The client PC should:
-1. Connect to the WebSocket endpoint: `ws://localhost:8000/ws/{pc_id}`
+1. Connect to the WebSocket endpoint: `ws://localhost:5000/ws/{pc_id}`
 2. Listen for messages with `type: "script"`
 3. Execute the received script content
 4. Send execution status back to the server using `execution_complete` message type

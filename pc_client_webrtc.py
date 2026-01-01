@@ -22,7 +22,7 @@ except ImportError:
     print("[!] WebRTC not available. Install: pip install aiortc")
 
 # Configuration
-SERVER_URL = os.getenv("SERVER_URL", "ws://localhost:8000")
+SERVER_URL = os.getenv("SERVER_URL", "ws://localhost:5000")
 PC_ID = os.getenv("PC_ID", socket.gethostname())
 
 logging.basicConfig(level=logging.INFO)

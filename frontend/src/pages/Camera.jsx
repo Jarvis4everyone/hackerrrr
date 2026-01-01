@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { Camera as CameraIcon, Play, Square, Monitor } from 'lucide-react'
 import { getPCs, startCameraStream, stopStream, getStreamStatus } from '../services/api'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
 const WS_BASE_URL = API_BASE_URL.replace('http://', 'ws://').replace('https://', 'wss://')
 
 const Camera = () => {

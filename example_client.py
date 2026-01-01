@@ -12,7 +12,7 @@ from websockets import connect
 import socket
 
 # Server configuration
-SERVER_URL = "ws://localhost:8000"
+SERVER_URL = "ws://localhost:5000"
 PC_ID = os.environ.get("PC_ID", socket.gethostname())
 
 

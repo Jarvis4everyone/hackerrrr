@@ -94,7 +94,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "Remote Script Server"
     APP_VERSION: str = "1.0.0"
     HOST: str = "0.0.0.0"
-    PORT: int = 8000
+    PORT: int = 5000
     DEBUG: bool = True
     
     # MongoDB Configuration
