@@ -14,6 +14,8 @@ services:
         value: False
       - key: MONGODB_URL
         sync: false
+        # Set this in Render dashboard to your MongoDB connection string
+        # Example: mongodb+srv://username:password@cluster.mongodb.net/
       - key: MONGODB_DB_NAME
         value: remote_script_server
     healthCheckPath: /api/health
@@ -27,4 +29,6 @@ services:
     envVars:
       - key: VITE_API_URL
         sync: false
+        # Set this in Render dashboard to your backend service URL
+        # Example: https://hackerrrr-backend.onrender.com
 
