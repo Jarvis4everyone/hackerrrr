@@ -328,15 +328,23 @@ const Camera = () => {
       }
 
       pc.onicecandidate = (event) => {
-        if (event.candidate && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({
-            type: 'webrtc_ice_candidate',
-            candidate: {
-              candidate: event.candidate.candidate,
-              sdpMLineIndex: event.candidate.sdpMLineIndex,
-              sdpMid: event.candidate.sdpMid
-            }
-          }))
+        if (event.candidate) {
+          console.log('[WebRTC] ICE candidate generated:', event.candidate.candidate.substring(0, 50) + '...')
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+              type: 'webrtc_ice_candidate',
+              candidate: {
+                candidate: event.candidate.candidate,
+                sdpMLineIndex: event.candidate.sdpMLineIndex,
+                sdpMid: event.candidate.sdpMid
+              }
+            }))
+            console.log('[WebRTC] ICE candidate sent to server')
+          } else {
+            console.warn('[WebRTC] WebSocket not open, cannot send ICE candidate. State:', ws.readyState)
+          }
+        } else {
+          console.log('[WebRTC] ICE candidate gathering complete')
         }
       }
 
@@ -472,40 +480,63 @@ const Camera = () => {
 
   const handleSignalingMessage = async (data, pcId) => {
     const pc = peerConnectionRef.current
-    if (!pc) return
+    if (!pc) {
+      console.error('[WebRTC] No peer connection available for signaling message')
+      return
+    }
 
     try {
       if (data.type === 'webrtc_offer') {
+        console.log('[WebRTC] Received offer, setting remote description...')
+        console.log('[WebRTC] Current signaling state:', pc.signalingState)
+        console.log('[WebRTC] Current ICE state:', pc.iceConnectionState)
+        
         await pc.setRemoteDescription(new RTCSessionDescription({
           type: 'offer',
           sdp: data.sdp
         }))
+        console.log('[WebRTC] Remote description set, signaling state:', pc.signalingState)
         
         const answer = await pc.createAnswer()
+        console.log('[WebRTC] Answer created, setting local description...')
         await pc.setLocalDescription(answer)
+        console.log('[WebRTC] Local description set, signaling state:', pc.signalingState)
+        console.log('[WebRTC] ICE connection state after answer:', pc.iceConnectionState)
         
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
           wsRef.current.send(JSON.stringify({
             type: 'webrtc_answer',
             sdp: answer.sdp
           }))
+          console.log('[WebRTC] ✅ Answer sent to server, ICE should start now...')
+        } else {
+          console.error('[WebRTC] ❌ WebSocket not open! State:', wsRef.current?.readyState)
         }
-        console.log('[WebRTC] Answer sent, connection in progress...')
       } else if (data.type === 'webrtc_ice_candidate') {
         if (data.candidate) {
-          await pc.addIceCandidate(new RTCIceCandidate({
-            candidate: data.candidate.candidate,
-            sdpMLineIndex: data.candidate.sdpMLineIndex,
-            sdpMid: data.candidate.sdpMid
-          }))
+          console.log('[WebRTC] Received ICE candidate from server')
+          try {
+            await pc.addIceCandidate(new RTCIceCandidate({
+              candidate: data.candidate.candidate,
+              sdpMLineIndex: data.candidate.sdpMLineIndex,
+              sdpMid: data.candidate.sdpMid
+            }))
+            console.log('[WebRTC] ✅ ICE candidate added, ICE state:', pc.iceConnectionState)
+          } catch (error) {
+            console.error('[WebRTC] Error adding ICE candidate:', error)
+          }
         }
       } else if (data.type === 'webrtc_error') {
         console.error('[WebRTC] Error from server:', data.message)
         setConnectionState('error')
         cleanupWebRTC()
+      } else if (data.type === 'ping') {
+        // Keepalive, no action needed
+        console.log('[WebRTC] Received ping from server')
       }
     } catch (error) {
       console.error('[WebRTC] Error handling signaling message:', error)
+      console.error('[WebRTC] Error details:', error.message, error.stack)
     }
   }
 

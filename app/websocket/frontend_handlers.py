@@ -192,9 +192,16 @@ async def handle_frontend_websocket(websocket: WebSocket, pc_id: str, stream_typ
                         # Frontend sends answer
                         answer_sdp = data.get("sdp")
                         if answer_sdp:
+                            logger.info(f"[Frontend WebRTC] Received answer from frontend")
+                            logger.info(f"[Frontend WebRTC] Current signaling state: {frontend_pc.signalingState}")
+                            logger.info(f"[Frontend WebRTC] Current ICE state: {frontend_pc.iceConnectionState}")
+                            
                             answer = RTCSessionDescription(sdp=answer_sdp, type="answer")
                             await frontend_pc.setRemoteDescription(answer)
-                            logger.info(f"[Frontend WebRTC] Received answer from frontend")
+                            
+                            logger.info(f"[Frontend WebRTC] Answer set, signaling state: {frontend_pc.signalingState}")
+                            logger.info(f"[Frontend WebRTC] ICE connection state: {frontend_pc.iceConnectionState}")
+                            logger.info(f"[Frontend WebRTC] Connection state: {frontend_pc.connectionState}")
                     
                     elif message_type == "webrtc_ice_candidate":
                         # Frontend sends ICE candidate
