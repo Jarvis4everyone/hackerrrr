@@ -95,10 +95,20 @@ async def handle_frontend_websocket(websocket: WebSocket, pc_id: str, stream_typ
             
             # Add tracks to frontend connection using relay
             for track in pc_tracks:
+                # Ensure track is enabled before relaying
+                if hasattr(track, 'enabled') and not track.enabled:
+                    logger.info(f"[Frontend WebRTC] Enabling track before relay")
+                    track.enabled = True
+                
                 # Use MediaRelay to share the track
                 relayed_track = webrtc_service.relay.subscribe(track)
+                
+                # Ensure relayed track is enabled
+                if hasattr(relayed_track, 'enabled') and not relayed_track.enabled:
+                    relayed_track.enabled = True
+                
                 frontend_pc.addTrack(relayed_track)
-                logger.info(f"[Frontend WebRTC] Added {track.kind} track to frontend connection")
+                logger.info(f"[Frontend WebRTC] Added {track.kind} track to frontend connection (enabled: {getattr(relayed_track, 'enabled', 'N/A')})")
             
             # Create offer (server has the track, so it creates offer)
             offer = await frontend_pc.createOffer()

@@ -218,20 +218,45 @@ const Camera = () => {
             stream = new MediaStream([event.track])
           }
           
-          // Ensure track is enabled
+          // Ensure track is enabled and unmuted
           if (!event.track.enabled) {
             console.log('[WebRTC] Enabling video track')
             event.track.enabled = true
           }
           
+          // Unmute the track if it's muted
+          if (event.track.muted) {
+            console.log('[WebRTC] Track is muted, attempting to unmute')
+            // Try to unmute by setting muted property
+            try {
+              event.track.muted = false
+            } catch (e) {
+              console.warn('[WebRTC] Could not directly unmute track:', e)
+            }
+          }
+          
           console.log('[WebRTC] Setting video srcObject')
           console.log('[WebRTC] Stream video tracks:', stream.getVideoTracks().length)
+          console.log('[WebRTC] Track enabled:', event.track.enabled, 'muted:', event.track.muted, 'readyState:', event.track.readyState)
           
           // Clear any existing stream first
           if (videoRef.current.srcObject) {
             const oldStream = videoRef.current.srcObject
             oldStream.getTracks().forEach(track => track.stop())
           }
+          
+          // Ensure all tracks in the stream are enabled
+          stream.getVideoTracks().forEach(track => {
+            track.enabled = true
+            if (track.muted) {
+              try {
+                track.muted = false
+              } catch (e) {
+                // Some browsers don't allow direct muted property change
+              }
+            }
+            console.log('[WebRTC] Track configured - enabled:', track.enabled, 'muted:', track.muted, 'readyState:', track.readyState)
+          })
           
           videoRef.current.srcObject = stream
           setConnectionState('connected')
@@ -600,7 +625,7 @@ const Camera = () => {
                     ref={videoRef}
                     autoPlay
                     playsInline
-                    muted
+                    muted={false}
                     className="w-full h-full object-contain bg-black"
                     style={{ aspectRatio: '16/9' }}
                     onLoadedMetadata={() => {

@@ -121,6 +121,13 @@ class WebRTCService:
         @pc.on("track")
         def on_track(track):
             logger.info(f"[WebRTC] {pc_id} received track: {track.kind}")
+            logger.info(f"[WebRTC] Track enabled: {track.enabled}, muted: {getattr(track, 'muted', 'N/A')}, readyState: {getattr(track, 'readyState', 'N/A')}")
+            
+            # Ensure track is enabled
+            if hasattr(track, 'enabled') and not track.enabled:
+                logger.info(f"[WebRTC] Enabling track for {pc_id}")
+                track.enabled = True
+            
             # Store track for relaying to frontend
             if pc_id not in self.pc_tracks:
                 self.pc_tracks[pc_id] = []
