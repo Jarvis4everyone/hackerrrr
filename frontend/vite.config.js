@@ -12,8 +12,9 @@ export default defineConfig({
     hmr: {
       // Use the public IP or hostname if accessing remotely
       // Set VITE_HMR_HOST environment variable to override
-      host: process.env.VITE_HMR_HOST || 'localhost',
-      clientPort: 3000
+      host: process.env.VITE_HMR_HOST || process.env.HOST || 'localhost',
+      clientPort: parseInt(process.env.VITE_HMR_PORT || process.env.PORT || '3000'),
+      protocol: process.env.VITE_HMR_PROTOCOL || 'ws'
     },
     proxy: {
       '/api': {
