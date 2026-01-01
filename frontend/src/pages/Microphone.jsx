@@ -3,7 +3,7 @@ import { Mic, Play, Square, Monitor, Volume2, Download } from 'lucide-react'
 import { getPCs, startMicrophoneStream, stopStream, getStreamStatus } from '../services/api'
 import lamejs from 'lamejs'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const WS_BASE_URL = API_BASE_URL.replace('http://', 'ws://').replace('https://', 'wss://')
 
 const Microphone = () => {

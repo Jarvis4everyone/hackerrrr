@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -235,24 +235,11 @@ export const getTerminalSession = async (sessionId) => {
 
 // Auth API
 export const login = async (username, password) => {
-  console.log('[API] Login attempt:', { username, baseURL: api.defaults.baseURL })
-  try {
-    const response = await api.post('/api/auth/login', {
-      username,
-      password
-    })
-    console.log('[API] Login success:', response.data)
-    return response.data
-  } catch (error) {
-    console.error('[API] Login error:', error)
-    console.error('[API] Error details:', {
-      message: error.message,
-      response: error.response?.data,
-      status: error.response?.status,
-      config: error.config
-    })
-    throw error
-  }
+  const response = await api.post('/api/auth/login', {
+    username,
+    password
+  })
+  return response.data
 }
 
 export const logout = async () => {

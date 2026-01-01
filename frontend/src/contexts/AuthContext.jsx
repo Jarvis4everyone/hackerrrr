@@ -40,23 +40,18 @@ export const AuthProvider = ({ children }) => {
   }, [])
 
   const login = async (username, password) => {
-    console.log('[AuthContext] Login called:', username)
     try {
       const response = await apiLogin(username, password)
-      console.log('[AuthContext] Login response:', response)
       localStorage.setItem('auth_token', response.token)
       setIsAuthenticated(true)
       setUsername(username)
       return { success: true }
     } catch (error) {
-      console.error('[AuthContext] Login error:', error)
-      console.error('[AuthContext] Error response:', error.response)
       return {
         success: false,
-        error: error.response?.data?.detail || error.message || 'Login failed'
+        error: error.response?.data?.detail || 'Login failed'
       }
     }
-  }
   }
 
   const logout = async () => {
