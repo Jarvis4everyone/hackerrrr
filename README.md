@@ -78,8 +78,50 @@ MONGODB_URL=mongodb://localhost:27017
 MONGODB_DB_NAME=remote_script_server
 ```
 
+## Quick Start
+
+### Pull Latest Code and Run Both Servers
+
+1. **Pull the latest code from GitHub:**
+```bash
+git pull origin main
+```
+
+2. **Install/Update dependencies (if needed):**
+```bash
+# Backend dependencies
+pip install -r requirements.txt
+
+# Frontend dependencies
+cd frontend
+npm install
+cd ..
+```
+
+3. **Run both backend and frontend together:**
+```bash
+./start.sh
+```
+
+Or on Windows (using Git Bash):
+```bash
+bash start.sh
+```
+
+This will start:
+- **Backend** on `http://localhost:8000`
+- **Frontend** on `http://localhost:3000`
+
+Press `Ctrl+C` to stop both servers.
+
 ## Running the Server
 
+**Option 1: Using the startup script (recommended)**
+```bash
+./start.sh
+```
+
+**Option 2: Run backend separately**
 ```bash
 python run.py
 ```
@@ -96,9 +138,15 @@ The server will start on `http://localhost:8000` by default.
 
 The frontend is a React application located in the `frontend/` directory.
 
+**Option 1: Using the startup script (recommended)**
+```bash
+./start.sh  # Starts both backend and frontend
+```
+
+**Option 2: Run frontend separately**
 ```bash
 cd frontend
-npm install
+npm install  # Only needed first time or after dependency changes
 npm run dev
 ```
 
