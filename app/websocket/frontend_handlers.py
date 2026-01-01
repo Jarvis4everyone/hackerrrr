@@ -16,11 +16,6 @@ async def handle_frontend_websocket(websocket: WebSocket, pc_id: str, stream_typ
         await websocket.accept()
         logger.info(f"[Frontend WebRTC] Frontend connected for {pc_id} {stream_type} stream")
         
-        # Wait for PC's peer connection and tracks to be available
-        pc_connection = None
-        max_wait = 10  # Wait up to 10 seconds for tracks
-        wait_count = 0
-        
         # Map stream_type to WebRTC track kind
         # camera -> video, microphone -> audio, screen -> video
         if stream_type == "camera" or stream_type == "screen":
@@ -30,96 +25,128 @@ async def handle_frontend_websocket(websocket: WebSocket, pc_id: str, stream_typ
         else:
             track_kind = stream_type
         
+        # Wait for PC's peer connection and tracks to be available
+        # The PC sends an offer which creates the peer connection and tracks
+        # We need to wait for this to happen
+        pc_connection = None
+        pc_tracks = []
+        max_wait = 30  # Wait up to 30 seconds for tracks (PC needs time to start stream and send offer)
+        wait_count = 0
+        
+        logger.info(f"[Frontend WebRTC] Waiting for PC '{pc_id}' to start {stream_type} stream and send offer...")
+        
         while wait_count < max_wait:
             pc_connection = webrtc_service.peer_connections.get(pc_id)
             if pc_connection:
+                # Try to get tracks
                 pc_tracks = webrtc_service.get_pc_tracks(pc_id, track_kind)
+                
+                # If no tracks from service, try transceivers
+                if not pc_tracks:
+                    for transceiver in pc_connection.getTransceivers():
+                        if transceiver.receiver and transceiver.receiver.track:
+                            track = transceiver.receiver.track
+                            if track.kind == track_kind:
+                                pc_tracks.append(track)
+                
                 if pc_tracks:
+                    logger.info(f"[Frontend WebRTC] Found {len(pc_tracks)} {track_kind} track(s) for PC '{pc_id}'")
                     break
+            
             await asyncio.sleep(0.5)
             wait_count += 1
+            
+            # Send keepalive every 5 seconds to keep connection alive
+            if wait_count % 10 == 0:
+                try:
+                    await websocket.send_json({"type": "ping"})
+                except:
+                    pass
         
         if not pc_connection:
-            logger.warning(f"[Frontend WebRTC] No peer connection for PC '{pc_id}', waiting...")
-            # Wait a bit more for the connection
-            await asyncio.sleep(2)
-            pc_connection = webrtc_service.peer_connections.get(pc_id)
-            if not pc_connection:
-                await websocket.send_json({
-                    "type": "webrtc_error",
-                    "message": f"No active stream for PC '{pc_id}'. Please start the stream first."
-                })
-                return
-        
-        # Get track from PC connection and relay to frontend
-        pc_tracks = webrtc_service.get_pc_tracks(pc_id, track_kind)
-        
-        if not pc_tracks:
-            # Fallback: try to get tracks from transceivers
+            logger.error(f"[Frontend WebRTC] No peer connection for PC '{pc_id}' after {max_wait * 0.5} seconds")
+            await websocket.send_json({
+                "type": "webrtc_error",
+                "message": f"No active stream for PC '{pc_id}'. Please start the stream first and wait a few seconds."
+            })
+            # Don't return - keep WebSocket open so frontend can retry
+            # Just wait for messages in case stream starts later
+            pc_connection = None
             pc_tracks = []
-            for transceiver in pc_connection.getTransceivers():
-                if transceiver.receiver and transceiver.receiver.track:
-                    track = transceiver.receiver.track
-                    if track.kind == track_kind:
-                        pc_tracks.append(track)
         
-        if not pc_tracks:
-            logger.warning(f"[Frontend WebRTC] No {track_kind} tracks found for PC '{pc_id}', waiting a bit more...")
-            # Wait a bit more for tracks to arrive
-            await asyncio.sleep(2)
-            pc_tracks = webrtc_service.get_pc_tracks(pc_id, track_kind)
-            if not pc_tracks:
-                # Try transceivers again
-                for transceiver in pc_connection.getTransceivers():
-                    if transceiver.receiver and transceiver.receiver.track:
-                        track = transceiver.receiver.track
-                        if track.kind == track_kind:
-                            pc_tracks.append(track)
-            
-            if not pc_tracks:
-                await websocket.send_json({
-                    "type": "webrtc_error",
-                    "message": f"No {track_kind} track available for PC '{pc_id}' yet. Please wait and try again."
-                })
-                return
+        if not pc_tracks and pc_connection:
+            logger.error(f"[Frontend WebRTC] No {track_kind} tracks found for PC '{pc_id}' after {max_wait * 0.5} seconds")
+            await websocket.send_json({
+                "type": "webrtc_error",
+                "message": f"No {track_kind} track available for PC '{pc_id}' yet. Please wait and try again."
+            })
+            # Don't return - keep WebSocket open
+            pc_tracks = []
+        
+        # If we still don't have tracks, we'll wait in the message loop
+        # The frontend can send a message to retry, or we'll check periodically
         
         # Create frontend peer connection to relay video to browser
         frontend_pc = None
+        
+        # Function to set up frontend peer connection when tracks are available
+        async def setup_frontend_connection():
+            nonlocal frontend_pc, pc_tracks, pc_connection
+            
+            if not pc_tracks or not pc_connection:
+                return False
+            
+            try:
+                from aiortc import RTCPeerConnection, RTCSessionDescription, RTCConfiguration, RTCIceServer, RTCIceCandidate
+                
+                if frontend_pc:
+                    # Already set up
+                    return True
+                
+                # Get ICE servers with TURN support from webrtc_service
+                ice_servers = await webrtc_service.get_ice_servers()
+                configuration = RTCConfiguration(iceServers=ice_servers)
+                frontend_pc = RTCPeerConnection(configuration=configuration)
+                
+                # Add tracks to frontend connection using relay
+                for track in pc_tracks:
+                    # Ensure track is enabled before relaying
+                    if hasattr(track, 'enabled') and not track.enabled:
+                        logger.info(f"[Frontend WebRTC] Enabling track before relay")
+                        track.enabled = True
+                    
+                    # Use MediaRelay to share the track
+                    relayed_track = webrtc_service.relay.subscribe(track)
+                    
+                    # Ensure relayed track is enabled
+                    if hasattr(relayed_track, 'enabled') and not relayed_track.enabled:
+                        relayed_track.enabled = True
+                    
+                    frontend_pc.addTrack(relayed_track)
+                    logger.info(f"[Frontend WebRTC] Added {track.kind} track to frontend connection (enabled: {getattr(relayed_track, 'enabled', 'N/A')})")
+                
+                # Create offer (server has the track, so it creates offer)
+                offer = await frontend_pc.createOffer()
+                await frontend_pc.setLocalDescription(offer)
+                
+                # Send offer to frontend
+                await websocket.send_json({
+                    "type": "webrtc_offer",
+                    "sdp": offer.sdp
+                })
+                logger.info(f"[Frontend WebRTC] ✅ Sent offer to frontend")
+                return True
+                
+            except Exception as e:
+                logger.error(f"[Frontend WebRTC] Error setting up frontend connection: {e}", exc_info=True)
+                return False
+        
+        # Try to set up connection if we have tracks
+        if pc_tracks and pc_connection:
+            await setup_frontend_connection()
+        
         try:
             from aiortc import RTCPeerConnection, RTCSessionDescription, RTCConfiguration, RTCIceServer, RTCIceCandidate
-            
-            # Get ICE servers with TURN support from webrtc_service
-            ice_servers = await webrtc_service.get_ice_servers()
-            configuration = RTCConfiguration(iceServers=ice_servers)
-            frontend_pc = RTCPeerConnection(configuration=configuration)
-            
-            # Add tracks to frontend connection using relay
-            for track in pc_tracks:
-                # Ensure track is enabled before relaying
-                if hasattr(track, 'enabled') and not track.enabled:
-                    logger.info(f"[Frontend WebRTC] Enabling track before relay")
-                    track.enabled = True
-                
-                # Use MediaRelay to share the track
-                relayed_track = webrtc_service.relay.subscribe(track)
-                
-                # Ensure relayed track is enabled
-                if hasattr(relayed_track, 'enabled') and not relayed_track.enabled:
-                    relayed_track.enabled = True
-                
-                frontend_pc.addTrack(relayed_track)
-                logger.info(f"[Frontend WebRTC] Added {track.kind} track to frontend connection (enabled: {getattr(relayed_track, 'enabled', 'N/A')})")
-            
-            # Create offer (server has the track, so it creates offer)
-            offer = await frontend_pc.createOffer()
-            await frontend_pc.setLocalDescription(offer)
-            
-            # Send offer to frontend
-            await websocket.send_json({
-                "type": "webrtc_offer",
-                "sdp": offer.sdp
-            })
-            logger.info(f"[Frontend WebRTC] Sent offer to frontend")
             
             # Handle ICE candidates from frontend peer connection (server -> frontend)
             @frontend_pc.on("icecandidate")
@@ -185,6 +212,25 @@ async def handle_frontend_websocket(websocket: WebSocket, pc_id: str, stream_typ
             # Listen for messages from frontend
             while True:
                 try:
+                    # If we don't have tracks yet, check periodically
+                    if not pc_tracks and not frontend_pc:
+                        # Check for tracks every 2 seconds
+                        await asyncio.sleep(2)
+                        pc_connection = webrtc_service.peer_connections.get(pc_id)
+                        if pc_connection:
+                            pc_tracks = webrtc_service.get_pc_tracks(pc_id, track_kind)
+                            if not pc_tracks:
+                                # Try transceivers
+                                for transceiver in pc_connection.getTransceivers():
+                                    if transceiver.receiver and transceiver.receiver.track:
+                                        track = transceiver.receiver.track
+                                        if track.kind == track_kind:
+                                            pc_tracks.append(track)
+                            
+                            if pc_tracks:
+                                logger.info(f"[Frontend WebRTC] Tracks now available, setting up connection...")
+                                await setup_frontend_connection()
+                    
                     data = await asyncio.wait_for(websocket.receive_json(), timeout=30.0)
                     message_type = data.get("type")
                     
@@ -202,6 +248,28 @@ async def handle_frontend_websocket(websocket: WebSocket, pc_id: str, stream_typ
                             logger.info(f"[Frontend WebRTC] Answer set, signaling state: {frontend_pc.signalingState}")
                             logger.info(f"[Frontend WebRTC] ICE connection state: {frontend_pc.iceConnectionState}")
                             logger.info(f"[Frontend WebRTC] Connection state: {frontend_pc.connectionState}")
+                    
+                    elif message_type == "retry" or message_type == "check_tracks":
+                        # Frontend wants to retry or check for tracks
+                        logger.info(f"[Frontend WebRTC] Received {message_type} message, checking for tracks...")
+                        pc_connection = webrtc_service.peer_connections.get(pc_id)
+                        if pc_connection:
+                            pc_tracks = webrtc_service.get_pc_tracks(pc_id, track_kind)
+                            if not pc_tracks:
+                                for transceiver in pc_connection.getTransceivers():
+                                    if transceiver.receiver and transceiver.receiver.track:
+                                        track = transceiver.receiver.track
+                                        if track.kind == track_kind:
+                                            pc_tracks.append(track)
+                            
+                            if pc_tracks and not frontend_pc:
+                                logger.info(f"[Frontend WebRTC] Tracks available, setting up connection...")
+                                await setup_frontend_connection()
+                            elif not pc_tracks:
+                                await websocket.send_json({
+                                    "type": "webrtc_error",
+                                    "message": f"Still waiting for {track_kind} track from PC '{pc_id}'. Please ensure the stream is started."
+                                })
                     
                     elif message_type == "webrtc_ice_candidate":
                         # Frontend sends ICE candidate
