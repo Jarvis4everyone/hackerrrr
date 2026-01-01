@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { Mic, Play, Square, Monitor, Volume2, Download } from 'lucide-react'
 import { getPCs, startMicrophoneStream, stopStream, getStreamStatus } from '../services/api'
+import { createPeerConnection } from '../utils/webrtc'
 import lamejs from 'lamejs'
 
 // Get API URL from environment or construct from current location
@@ -188,14 +189,8 @@ const Microphone = () => {
         setConnectionState('disconnected')
       }
 
-      const pc = new RTCPeerConnection({
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: 'stun:stun2.l.google.com:19302' }
-        ],
-        iceCandidatePoolSize: 10
-      })
+      // Create peer connection with TURN server support
+      const pc = await createPeerConnection({ iceCandidatePoolSize: 10 })
       peerConnectionRef.current = pc
 
       // Handle incoming audio tracks

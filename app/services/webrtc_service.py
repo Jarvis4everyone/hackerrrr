@@ -1,9 +1,11 @@
 """
 WebRTC Service - Manages WebRTC peer connections for streaming
 """
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 import logging
 import asyncio
+import aiohttp
+from app.config import settings
 
 # Try to import aiortc, but make it optional
 try:
@@ -47,6 +49,56 @@ class WebRTCService:
         self.pc_tracks: Dict[str, list] = {}
         # Media relay for sharing media tracks
         self.relay = MediaRelay()
+        # Cache for ICE servers
+        self._ice_servers_cache = None
+        self._ice_servers_cache_time = 0
+    
+    async def get_ice_servers(self) -> List[RTCIceServer]:
+        """Get ICE servers with TURN support from Metered.ca"""
+        # Return cached servers if still valid (cache for 1 hour)
+        import time
+        now = time.time()
+        if self._ice_servers_cache and (now - self._ice_servers_cache_time) < 3600:
+            return self._ice_servers_cache
+        
+        try:
+            # Try to fetch from Metered.ca API
+            api_url = f"{settings.METERED_API_URL}?apiKey={settings.METERED_API_KEY}"
+            async with aiohttp.ClientSession() as session:
+                async with session.get(api_url, timeout=aiohttp.ClientTimeout(total=5)) as response:
+                    if response.status == 200:
+                        ice_servers_data = await response.json()
+                        if isinstance(ice_servers_data, list) and len(ice_servers_data) > 0:
+                            # Convert to RTCIceServer objects
+                            ice_servers = []
+                            for server in ice_servers_data:
+                                if isinstance(server, dict):
+                                    urls = server.get('urls')
+                                    if isinstance(urls, str):
+                                        urls = [urls]
+                                    ice_servers.append(RTCIceServer(
+                                        urls=urls,
+                                        username=server.get('username'),
+                                        credential=server.get('credential')
+                                    ))
+                            
+                            if ice_servers:
+                                logger.info(f"[WebRTC] Fetched {len(ice_servers)} TURN servers from Metered.ca")
+                                self._ice_servers_cache = ice_servers
+                                self._ice_servers_cache_time = now
+                                return ice_servers
+        except Exception as e:
+            logger.warning(f"[WebRTC] Failed to fetch TURN credentials, using STUN only: {e}")
+        
+        # Fallback to STUN servers
+        fallback_servers = [
+            RTCIceServer(urls=["stun:stun.l.google.com:19302"]),
+            RTCIceServer(urls=["stun:stun1.l.google.com:19302"]),
+            RTCIceServer(urls=["stun:stun2.l.google.com:19302"]),
+        ]
+        self._ice_servers_cache = fallback_servers
+        self._ice_servers_cache_time = now
+        return fallback_servers
     
     async def create_peer_connection(self, pc_id: str, on_ice_candidate=None) -> RTCPeerConnection:
         """Create a new RTCPeerConnection for a PC"""
@@ -56,17 +108,11 @@ class WebRTCService:
         # Stop any existing stream first
         await self.stop_stream(pc_id)
         
-        # Create peer connection with STUN servers
-        # For cloud deployment, we need multiple STUN servers for better NAT traversal
-        configuration = RTCConfiguration(
-            iceServers=[
-                RTCIceServer(urls=["stun:stun.l.google.com:19302"]),
-                RTCIceServer(urls=["stun:stun1.l.google.com:19302"]),
-                RTCIceServer(urls=["stun:stun2.l.google.com:19302"]),
-                # Add TURN server if available via environment variable
-                # RTCIceServer(urls=["turn:turnserver.com:3478"], username="user", credential="pass")
-            ]
-        )
+        # Get ICE servers with TURN support
+        ice_servers = await self.get_ice_servers()
+        
+        # Create peer connection with TURN/STUN servers
+        configuration = RTCConfiguration(iceServers=ice_servers)
         
         pc = RTCPeerConnection(configuration=configuration)
         self.peer_connections[pc_id] = pc

@@ -111,6 +111,11 @@ class Settings(BaseSettings):
     WS_HEARTBEAT_TIMEOUT: int = 30
     WS_PING_INTERVAL: int = 30
     
+    # TURN Server Configuration (for WebRTC NAT traversal)
+    # Metered.ca free TURN server credentials
+    METERED_API_KEY: str = os.getenv("METERED_API_KEY", "4b7268b361c4e1a08789e6415026801bfb20")
+    METERED_API_URL: str = os.getenv("METERED_API_URL", "https://x1.metered.live/api/v1/turn/credentials")
+    
     # Server URL (from .env, used in scripts)
     # Note: .env file uses "Serverurl" (case-sensitive)
     SERVER_URL: Optional[str] = None

@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { Camera as CameraIcon, Play, Square, Monitor } from 'lucide-react'
 import { getPCs, startCameraStream, stopStream, getStreamStatus } from '../services/api'
+import { createPeerConnection } from '../utils/webrtc'
 
 // Get API URL from environment or construct from current location
 let API_BASE_URL = import.meta.env.VITE_API_URL
@@ -178,14 +179,8 @@ const Camera = () => {
         }
       }
 
-      const pc = new RTCPeerConnection({
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: 'stun:stun2.l.google.com:19302' }
-        ],
-        iceCandidatePoolSize: 10
-      })
+      // Create peer connection with TURN server support
+      const pc = await createPeerConnection({ iceCandidatePoolSize: 10 })
       peerConnectionRef.current = pc
       
       let trackCheckInterval = null
