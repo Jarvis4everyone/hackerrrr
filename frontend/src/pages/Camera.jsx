@@ -224,15 +224,11 @@ const Camera = () => {
             event.track.enabled = true
           }
           
-          // Unmute the track if it's muted
+          // Note: Track muted state is read-only in browsers, but we can work around it
+          // The muted state might be due to the relay or initial connection state
           if (event.track.muted) {
-            console.log('[WebRTC] Track is muted, attempting to unmute')
-            // Try to unmute by setting muted property
-            try {
-              event.track.muted = false
-            } catch (e) {
-              console.warn('[WebRTC] Could not directly unmute track:', e)
-            }
+            console.log('[WebRTC] Track is muted (this is often normal during connection establishment)')
+            console.log('[WebRTC] Track will unmute automatically when media starts flowing')
           }
           
           console.log('[WebRTC] Setting video srcObject')
@@ -248,14 +244,19 @@ const Camera = () => {
           // Ensure all tracks in the stream are enabled
           stream.getVideoTracks().forEach(track => {
             track.enabled = true
-            if (track.muted) {
-              try {
-                track.muted = false
-              } catch (e) {
-                // Some browsers don't allow direct muted property change
+            // Note: muted property is read-only, but track will unmute when media flows
+            console.log('[WebRTC] Track configured - enabled:', track.enabled, 'muted:', track.muted, 'readyState:', track.readyState)
+            
+            // Monitor track state changes
+            track.onmute = () => {
+              console.warn('[WebRTC] Track was muted')
+            }
+            track.onunmute = () => {
+              console.log('[WebRTC] ✅ Track was unmuted!')
+              if (videoRef.current && videoRef.current.paused) {
+                videoRef.current.play().catch(console.error)
               }
             }
-            console.log('[WebRTC] Track configured - enabled:', track.enabled, 'muted:', track.muted, 'readyState:', track.readyState)
           })
           
           videoRef.current.srcObject = stream
@@ -631,7 +632,10 @@ const Camera = () => {
                     onLoadedMetadata={() => {
                       console.log('[WebRTC] Video metadata loaded')
                       console.log('[WebRTC] Video dimensions:', videoRef.current?.videoWidth, 'x', videoRef.current?.videoHeight)
+                      console.log('[WebRTC] Video muted:', videoRef.current?.muted)
                       if (videoRef.current) {
+                        // Ensure video is not muted
+                        videoRef.current.muted = false
                         videoRef.current.play().catch(error => {
                           console.error('[WebRTC] Error playing on metadata:', error)
                         })
@@ -645,13 +649,23 @@ const Camera = () => {
                     }}
                     onCanPlay={() => {
                       console.log('[WebRTC] Video can play')
+                      console.log('[WebRTC] Video dimensions:', videoRef.current?.videoWidth, 'x', videoRef.current?.videoHeight)
                       if (videoRef.current) {
+                        videoRef.current.muted = false
                         videoRef.current.play().catch(console.error)
                       }
                     }}
                     onPlay={() => {
                       console.log('[WebRTC] ✅ Video is playing!')
                       console.log('[WebRTC] Video dimensions:', videoRef.current?.videoWidth, 'x', videoRef.current?.videoHeight)
+                      console.log('[WebRTC] Video muted:', videoRef.current?.muted)
+                      // Check track states
+                      if (videoRef.current?.srcObject) {
+                        const tracks = videoRef.current.srcObject.getVideoTracks()
+                        tracks.forEach(track => {
+                          console.log('[WebRTC] Track on play - enabled:', track.enabled, 'muted:', track.muted, 'readyState:', track.readyState)
+                        })
+                      }
                     }}
                     onPlaying={() => {
                       console.log('[WebRTC] Video playing event fired')
