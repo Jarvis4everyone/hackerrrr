@@ -62,27 +62,16 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Enable CORS
-# Handle CORS origins - if ["*"] is used, we can't use allow_credentials
-cors_origins = settings.CORS_ORIGINS
-if cors_origins == ["*"] or "*" in cors_origins:
-    # Allow all origins but without credentials
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=False,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-else:
-    # Specific origins with credentials support
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=cors_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+# Enable CORS - Allow all origins
+# Using explicit configuration to ensure CORS headers are always sent
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins
+    allow_credentials=False,  # Must be False when using "*"
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+)
 
 # Include routers
 app.include_router(health.router)
