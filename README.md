@@ -152,6 +152,25 @@ npm run dev
 
 The frontend will be available at `http://localhost:3000`
 
+### Remote Access Configuration
+
+If you're accessing the frontend from a remote IP address (e.g., `93.127.195.74`):
+
+1. **Create/Update `.env` file in the `frontend/` directory:**
+```bash
+cd frontend
+# Set your backend API URL (use your server's IP or domain)
+VITE_API_URL=http://93.127.195.74:8000
+# Optional: Set HMR host for WebSocket connections (use your server's IP)
+VITE_HMR_HOST=93.127.195.74
+```
+
+2. **Make sure the backend is accessible** on port 8000 from your network
+
+3. **Restart the frontend server** after updating `.env`
+
+**Note:** The frontend server now listens on `0.0.0.0:3000` by default, allowing remote connections.
+
 For production build:
 
 ```bash
