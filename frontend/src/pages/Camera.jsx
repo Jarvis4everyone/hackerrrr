@@ -206,6 +206,10 @@ const Camera = () => {
         }
       }
 
+      // Store track for later use when ICE completes
+      let pendingVideoTrack = null
+      let pendingStream = null
+      
       pc.ontrack = (event) => {
         console.log('[WebRTC] ===== TRACK RECEIVED =====')
         console.log('[WebRTC] Track kind:', event.track.kind)
@@ -213,6 +217,8 @@ const Camera = () => {
         console.log('[WebRTC] Track muted:', event.track.muted)
         console.log('[WebRTC] Track readyState:', event.track.readyState)
         console.log('[WebRTC] Streams:', event.streams.length)
+        console.log('[WebRTC] ICE connection state:', pc.iceConnectionState)
+        console.log('[WebRTC] Connection state:', pc.connectionState)
         
         if (event.track.kind === 'video') {
           console.log('[WebRTC] Video track received!')
@@ -229,74 +235,95 @@ const Camera = () => {
             stream = new MediaStream([event.track])
           }
           
-          // Ensure track is enabled and unmuted
+          // Store for later use
+          pendingVideoTrack = event.track
+          pendingStream = stream
+          
+          // Ensure track is enabled
           if (!event.track.enabled) {
             console.log('[WebRTC] Enabling video track')
             event.track.enabled = true
           }
           
-          // Note: Track muted state is read-only in browsers, but we can work around it
-          // The muted state might be due to the relay or initial connection state
-          if (event.track.muted) {
-            console.log('[WebRTC] Track is muted (this is often normal during connection establishment)')
-            console.log('[WebRTC] Track will unmute automatically when media starts flowing')
+          // Monitor track state changes
+          event.track.onmute = () => {
+            console.warn('[WebRTC] Track was muted')
           }
-          
-          console.log('[WebRTC] Setting video srcObject')
-          console.log('[WebRTC] Stream video tracks:', stream.getVideoTracks().length)
-          console.log('[WebRTC] Track enabled:', event.track.enabled, 'muted:', event.track.muted, 'readyState:', event.track.readyState)
-          
-          // Clear any existing stream first
-          if (videoRef.current.srcObject) {
-            const oldStream = videoRef.current.srcObject
-            oldStream.getTracks().forEach(track => track.stop())
-          }
-          
-          // Ensure all tracks in the stream are enabled
-          stream.getVideoTracks().forEach(track => {
-            track.enabled = true
-            // Note: muted property is read-only, but track will unmute when media flows
-            console.log('[WebRTC] Track configured - enabled:', track.enabled, 'muted:', track.muted, 'readyState:', track.readyState)
-            
-            // Monitor track state changes
-            track.onmute = () => {
-              console.warn('[WebRTC] Track was muted')
+          event.track.onunmute = () => {
+            console.log('[WebRTC] ✅ Track was unmuted! Video frames should start flowing.')
+            if (videoRef.current && videoRef.current.paused) {
+              videoRef.current.play().catch(console.error)
             }
-            track.onunmute = () => {
-              console.log('[WebRTC] ✅ Track was unmuted!')
-              if (videoRef.current && videoRef.current.paused) {
-                videoRef.current.play().catch(console.error)
+          }
+          
+          // Function to set up video when ready
+          const setupVideo = () => {
+            if (!videoRef.current || !pendingStream) return
+            
+            console.log('[WebRTC] Setting up video element')
+            console.log('[WebRTC] Stream video tracks:', pendingStream.getVideoTracks().length)
+            console.log('[WebRTC] Track enabled:', pendingVideoTrack.enabled, 'muted:', pendingVideoTrack.muted, 'readyState:', pendingVideoTrack.readyState)
+            
+            // Clear any existing stream first
+            if (videoRef.current.srcObject) {
+              const oldStream = videoRef.current.srcObject
+              oldStream.getTracks().forEach(track => track.stop())
+            }
+            
+            // Ensure all tracks in the stream are enabled
+            pendingStream.getVideoTracks().forEach(track => {
+              track.enabled = true
+              console.log('[WebRTC] Track configured - enabled:', track.enabled, 'muted:', track.muted, 'readyState:', track.readyState)
+            })
+            
+            videoRef.current.srcObject = pendingStream
+            videoRef.current.muted = false
+            setConnectionState('connected')
+            
+            // Force play with multiple attempts
+            const attemptPlay = (attempts = 0) => {
+              if (!videoRef.current) return
+              
+              if (attempts < 5) {
+                videoRef.current.play()
+                  .then(() => {
+                    console.log('[WebRTC] ✅ Video is playing successfully!')
+                    console.log('[WebRTC] Video dimensions:', videoRef.current.videoWidth, 'x', videoRef.current.videoHeight)
+                    console.log('[WebRTC] Video readyState:', videoRef.current.readyState)
+                    
+                    // Check dimensions after a delay
+                    setTimeout(() => {
+                      if (videoRef.current) {
+                        console.log('[WebRTC] Video dimensions after delay:', videoRef.current.videoWidth, 'x', videoRef.current.videoHeight)
+                        if (videoRef.current.videoWidth === 0 && videoRef.current.videoHeight === 0) {
+                          console.warn('[WebRTC] ⚠️ Video dimensions still 0x0 - waiting for ICE connection to complete')
+                        }
+                      }
+                    }, 1000)
+                  })
+                  .catch((error) => {
+                    console.error('[WebRTC] ❌ Error playing video (attempt ' + (attempts + 1) + '):', error)
+                    if (attempts < 4) {
+                      setTimeout(() => attemptPlay(attempts + 1), 200)
+                    }
+                  })
               }
             }
-          })
-          
-          videoRef.current.srcObject = stream
-          setConnectionState('connected')
-          
-          // Force play with multiple attempts
-          const attemptPlay = (attempts = 0) => {
-            if (!videoRef.current) return
             
-            if (attempts < 5) {
-              videoRef.current.play()
-                .then(() => {
-                  console.log('[WebRTC] ✅ Video is playing successfully!')
-                  console.log('[WebRTC] Video dimensions:', videoRef.current.videoWidth, 'x', videoRef.current.videoHeight)
-                  console.log('[WebRTC] Video readyState:', videoRef.current.readyState)
-                })
-                .catch((error) => {
-                  console.error('[WebRTC] ❌ Error playing video (attempt ' + (attempts + 1) + '):', error)
-                  if (attempts < 4) {
-                    setTimeout(() => attemptPlay(attempts + 1), 200)
-                  }
-                })
-            }
+            // Try playing immediately and then retry
+            setTimeout(() => attemptPlay(0), 100)
+            setTimeout(() => attemptPlay(1), 500)
+            setTimeout(() => attemptPlay(2), 1000)
           }
           
-          // Try playing immediately and then retry
-          setTimeout(() => attemptPlay(0), 100)
-          setTimeout(() => attemptPlay(1), 500)
-          setTimeout(() => attemptPlay(2), 1000)
+          // Set up video immediately, but also wait for ICE if not ready
+          if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+            console.log('[WebRTC] ICE already connected, setting up video immediately')
+            setupVideo()
+          } else {
+            console.log('[WebRTC] ICE not connected yet, will set up video when ICE completes')
+            // Will be set up in oniceconnectionstatechange handler
+          }
         }
       }
 
@@ -363,6 +390,14 @@ const Camera = () => {
             console.log(`[WebRTC] Receiver ${i} - enabled: ${track.enabled}, muted: ${track.muted}, readyState: ${track.readyState}`)
           })
           
+          // If we have a pending stream, set it up now that ICE is connected
+          if (pendingStream && videoRef.current && !videoRef.current.srcObject) {
+            console.log('[WebRTC] Setting up pending video stream now that ICE is connected')
+            videoRef.current.srcObject = pendingStream
+            videoRef.current.muted = false
+            videoRef.current.play().catch(console.error)
+          }
+          
           // Force video play when ICE connects
           if (videoRef.current && videoRef.current.srcObject) {
             const tracks = videoRef.current.srcObject.getVideoTracks()
@@ -375,12 +410,22 @@ const Camera = () => {
               if (videoRef.current) {
                 videoRef.current.muted = false
                 videoRef.current.play().catch(console.error)
+                
+                // Check dimensions after a moment
+                setTimeout(() => {
+                  if (videoRef.current) {
+                    console.log('[WebRTC] Video dimensions after ICE connect:', videoRef.current.videoWidth, 'x', videoRef.current.videoHeight)
+                  }
+                }, 500)
               }
             }, 100)
           } else if (videoReceivers.length > 0) {
             // Create stream from receivers if video element doesn't have one
             console.log('[WebRTC] Creating stream from receivers after ICE connect')
             const stream = new MediaStream(videoReceivers.map(r => r.track).filter(Boolean))
+            stream.getVideoTracks().forEach(track => {
+              track.enabled = true
+            })
             if (videoRef.current) {
               videoRef.current.srcObject = stream
               videoRef.current.muted = false
