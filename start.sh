@@ -12,6 +12,15 @@ echo -e "${BLUE}Starting Backend and Frontend Servers${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
 
+# Pull latest code from GitHub
+echo -e "${GREEN}Pulling latest code from GitHub...${NC}"
+if git pull origin main; then
+    echo -e "${GREEN}✓ Code updated successfully${NC}"
+else
+    echo -e "${YELLOW}⚠ Git pull failed or no updates available${NC}"
+fi
+echo ""
+
 # Function to handle cleanup on exit
 cleanup() {
     echo ""
