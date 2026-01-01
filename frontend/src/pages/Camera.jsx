@@ -203,6 +203,10 @@ const Camera = () => {
       pc.ontrack = (event) => {
         console.log('[WebRTC] ===== TRACK RECEIVED =====')
         console.log('[WebRTC] Track kind:', event.track.kind)
+        console.log('[WebRTC] Track enabled:', event.track.enabled)
+        console.log('[WebRTC] Track muted:', event.track.muted)
+        console.log('[WebRTC] Track readyState:', event.track.readyState)
+        console.log('[WebRTC] Streams:', event.streams.length)
         
         if (event.track.kind === 'video') {
           console.log('[WebRTC] Video track received!')
@@ -212,23 +216,55 @@ const Camera = () => {
             return
           }
           
-          const stream = event.streams[0] || new MediaStream([event.track])
+          // Get stream from event or create new one
+          let stream = event.streams[0]
+          if (!stream || stream.getVideoTracks().length === 0) {
+            console.log('[WebRTC] Creating new MediaStream from track')
+            stream = new MediaStream([event.track])
+          }
+          
+          // Ensure track is enabled
+          if (!event.track.enabled) {
+            console.log('[WebRTC] Enabling video track')
+            event.track.enabled = true
+          }
+          
           console.log('[WebRTC] Setting video srcObject')
+          console.log('[WebRTC] Stream video tracks:', stream.getVideoTracks().length)
+          
+          // Clear any existing stream first
+          if (videoRef.current.srcObject) {
+            const oldStream = videoRef.current.srcObject
+            oldStream.getTracks().forEach(track => track.stop())
+          }
           
           videoRef.current.srcObject = stream
           setConnectionState('connected')
           
-          setTimeout(() => {
-            if (videoRef.current) {
-              console.log('[WebRTC] Attempting to play video...')
-              videoRef.current.play().then(() => {
-                console.log('[WebRTC] ✅ Video is playing successfully!')
-                console.log('[WebRTC] Video dimensions:', videoRef.current.videoWidth, 'x', videoRef.current.videoHeight)
-              }).catch((error) => {
-                console.error('[WebRTC] ❌ Error playing video:', error)
-              })
+          // Force play with multiple attempts
+          const attemptPlay = (attempts = 0) => {
+            if (!videoRef.current) return
+            
+            if (attempts < 5) {
+              videoRef.current.play()
+                .then(() => {
+                  console.log('[WebRTC] ✅ Video is playing successfully!')
+                  console.log('[WebRTC] Video dimensions:', videoRef.current.videoWidth, 'x', videoRef.current.videoHeight)
+                  console.log('[WebRTC] Video readyState:', videoRef.current.readyState)
+                })
+                .catch((error) => {
+                  console.error('[WebRTC] ❌ Error playing video (attempt ' + (attempts + 1) + '):', error)
+                  if (attempts < 4) {
+                    setTimeout(() => attemptPlay(attempts + 1), 200)
+                  }
+                })
             }
-          }, 100)
+          }
+          
+          // Try playing immediately and then retry
+          setTimeout(() => attemptPlay(0), 100)
+          setTimeout(() => attemptPlay(1), 500)
+          setTimeout(() => attemptPlay(2), 1000)
         }
       }
 
@@ -536,6 +572,15 @@ const Camera = () => {
                     style={{ aspectRatio: '16/9' }}
                     onLoadedMetadata={() => {
                       console.log('[WebRTC] Video metadata loaded')
+                      console.log('[WebRTC] Video dimensions:', videoRef.current?.videoWidth, 'x', videoRef.current?.videoHeight)
+                      if (videoRef.current) {
+                        videoRef.current.play().catch(error => {
+                          console.error('[WebRTC] Error playing on metadata:', error)
+                        })
+                      }
+                    }}
+                    onLoadedData={() => {
+                      console.log('[WebRTC] Video data loaded')
                       if (videoRef.current) {
                         videoRef.current.play().catch(console.error)
                       }
@@ -547,10 +592,22 @@ const Camera = () => {
                       }
                     }}
                     onPlay={() => {
-                      console.log('[WebRTC] Video is playing')
+                      console.log('[WebRTC] ✅ Video is playing!')
+                      console.log('[WebRTC] Video dimensions:', videoRef.current?.videoWidth, 'x', videoRef.current?.videoHeight)
+                    }}
+                    onPlaying={() => {
+                      console.log('[WebRTC] Video playing event fired')
+                    }}
+                    onWaiting={() => {
+                      console.log('[WebRTC] Video waiting for data')
+                    }}
+                    onStalled={() => {
+                      console.warn('[WebRTC] Video stalled')
                     }}
                     onError={(e) => {
                       console.error('[WebRTC] Video error:', e)
+                      console.error('[WebRTC] Video error code:', videoRef.current?.error?.code)
+                      console.error('[WebRTC] Video error message:', videoRef.current?.error?.message)
                     }}
                   />
                   {connectionState !== 'connected' && (
@@ -558,6 +615,15 @@ const Camera = () => {
                       <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-hack-green mx-auto mb-4"></div>
                         <p className="text-white font-medium">Connecting...</p>
+                      </div>
+                    </div>
+                  )}
+                  {videoRef.current && videoRef.current.videoWidth === 0 && connectionState === 'connected' && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                      <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-hack-green mx-auto mb-4"></div>
+                        <p className="text-white font-medium">Waiting for video data...</p>
+                        <p className="text-white/50 text-sm mt-2">ICE connection may still be establishing</p>
                       </div>
                     </div>
                   )}

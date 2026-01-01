@@ -154,17 +154,16 @@ async def stop_stream(pc_id: str):
 @router.get("/{pc_id}/status")
 async def get_stream_status(pc_id: str):
     """Get current stream status for a PC"""
-    # Check if PC is connected
-    if not manager.is_connected(pc_id):
-        raise HTTPException(status_code=404, detail=f"PC '{pc_id}' is not connected")
-    
+    # Don't require PC to be connected - just check if stream exists
+    # This allows checking status even if WebSocket connection is temporarily down
     stream_type = webrtc_service.get_active_stream(pc_id)
     has_stream = webrtc_service.has_active_stream(pc_id)
+    is_connected = manager.is_connected(pc_id)
     
     return {
         "pc_id": pc_id,
         "has_active_stream": has_stream,
         "stream_type": stream_type,
-        "connected": True
+        "connected": is_connected
     }
 
