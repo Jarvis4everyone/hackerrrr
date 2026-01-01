@@ -190,9 +190,20 @@ const Camera = () => {
           clearInterval(trackCheckInterval)
           trackCheckInterval = null
         }
-        console.log('[WebRTC] WebSocket closed', event.code, event.reason)
+        console.log('[WebRTC] WebSocket closed', event.code, event.reason || 'No reason')
         connectingRef.current = false
         setConnectionState('disconnected')
+        
+        // Don't auto-reconnect if it's a normal closure or if we're already connected
+        if (event.code === 1000 || peerConnectionRef.current?.connectionState === 'connected') {
+          console.log('[WebRTC] Normal closure or already connected, not reconnecting')
+          return
+        }
+        
+        // Only reconnect if connection failed
+        if (event.code !== 1000 && event.code !== 1001) {
+          console.log('[WebRTC] Unexpected closure, will reconnect if needed')
+        }
       }
 
       pc.ontrack = (event) => {

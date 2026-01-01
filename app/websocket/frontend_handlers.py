@@ -164,6 +164,23 @@ async def handle_frontend_websocket(websocket: WebSocket, pc_id: str, stream_typ
             @frontend_pc.on("connectionstatechange")
             async def on_connectionstatechange():
                 logger.info(f"[Frontend WebRTC] Frontend connection state: {frontend_pc.connectionState}")
+                if frontend_pc.connectionState == "connected":
+                    logger.info(f"[Frontend WebRTC] ✅ Frontend connection established! Video should start flowing.")
+                elif frontend_pc.connectionState == "failed":
+                    logger.error(f"[Frontend WebRTC] ❌ Frontend connection failed!")
+            
+            # Monitor ICE connection state
+            @frontend_pc.on("iceconnectionstatechange")
+            async def on_iceconnectionstatechange():
+                logger.info(f"[Frontend WebRTC] ICE connection state: {frontend_pc.iceConnectionState}")
+                if frontend_pc.iceConnectionState in ["connected", "completed"]:
+                    logger.info(f"[Frontend WebRTC] ✅ ICE connection established! Media should flow now.")
+            
+            # Monitor track events on frontend connection
+            @frontend_pc.on("track")
+            def on_frontend_track(track):
+                logger.info(f"[Frontend WebRTC] Track event on frontend connection: {track.kind}")
+                logger.info(f"[Frontend WebRTC] Track enabled: {track.enabled}, readyState: {getattr(track, 'readyState', 'N/A')}")
             
             # Listen for messages from frontend
             while True:
