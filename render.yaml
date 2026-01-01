@@ -2,7 +2,7 @@ services:
   - type: web
     name: hackerrrr-backend
     env: docker
-    dockerfilePath: ./Dockerfile.backend
+    dockerfilePath: Dockerfile.backend
     dockerContext: .
     plan: free
     envVars:
@@ -23,7 +23,7 @@ services:
   - type: web
     name: hackerrrr-frontend
     env: docker
-    dockerfilePath: ./Dockerfile.frontend
+    dockerfilePath: Dockerfile.frontend
     dockerContext: .
     plan: free
     envVars:
