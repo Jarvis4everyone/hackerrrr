@@ -18,6 +18,14 @@ services:
         # Example: mongodb+srv://username:password@cluster.mongodb.net/
       - key: MONGODB_DB_NAME
         value: remote_script_server
+      - key: AUTH_USERNAME
+        sync: false
+        # Set this in Render dashboard to your desired username
+        # Example: admin
+      - key: AUTH_PASSWORD
+        sync: false
+        # Set this in Render dashboard to your desired password
+        # Example: your_secure_password
     healthCheckPath: /api/health
 
   - type: web

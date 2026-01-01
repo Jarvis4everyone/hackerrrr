@@ -116,9 +116,10 @@ class Settings(BaseSettings):
     SERVER_URL: Optional[str] = None
     
     # Authentication Configuration
-    # Note: .env file uses "Username" and "Password" (case-sensitive, with spaces around =)
-    AUTH_USERNAME: str = "admin"
-    AUTH_PASSWORD: str = "admin"
+    # Can be set via environment variables: AUTH_USERNAME and AUTH_PASSWORD
+    # Or via .env file using "Username" and "Password" (case-sensitive, with spaces around =)
+    AUTH_USERNAME: str = os.getenv("AUTH_USERNAME", "admin")
+    AUTH_PASSWORD: str = os.getenv("AUTH_PASSWORD", "admin")
 
 
 settings = Settings()
@@ -139,16 +140,16 @@ if env_file_path.exists():
                     key = key.strip()
                     value = value.strip().strip('"').strip("'")
                     
-                    # Override settings with values from .env
-                    if key == "MONGODB_URL":
+                    # Override settings with values from .env (only if not set via environment variables)
+                    if key == "MONGODB_URL" and not os.getenv("MONGODB_URL"):
                         settings.MONGODB_URL = value
-                    elif key == "MONGODB_DB_NAME":
+                    elif key == "MONGODB_DB_NAME" and not os.getenv("MONGODB_DB_NAME"):
                         settings.MONGODB_DB_NAME = value
-                    elif key == "Serverurl" or key == "SERVER_URL":
+                    elif (key == "Serverurl" or key == "SERVER_URL") and not os.getenv("SERVER_URL"):
                         settings.SERVER_URL = value
-                    elif key == "Username":
+                    elif key == "Username" and not os.getenv("AUTH_USERNAME"):
                         settings.AUTH_USERNAME = value
-                    elif key == "Password":
+                    elif key == "Password" and not os.getenv("AUTH_PASSWORD"):
                         settings.AUTH_PASSWORD = value
     except Exception as e:
         logger.warning(f"Error reading .env file: {e}")
