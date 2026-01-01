@@ -286,11 +286,49 @@ const Camera = () => {
         setConnectionState(pc.connectionState)
         
         if (pc.connectionState === 'connected') {
-          console.log('[WebRTC] Connection established!')
-        }
-        
-        if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+          console.log('[WebRTC] ✅ Connection established!')
+          // When connected, ensure video is playing
+          if (videoRef.current && videoRef.current.srcObject) {
+            const tracks = videoRef.current.srcObject.getVideoTracks()
+            console.log('[WebRTC] Active video tracks on connection:', tracks.length)
+            tracks.forEach(track => {
+              console.log('[WebRTC] Track state:', track.readyState, 'enabled:', track.enabled)
+            })
+            // Force play attempt when connection is established
+            setTimeout(() => {
+              if (videoRef.current) {
+                videoRef.current.play().catch(console.error)
+              }
+            }, 100)
+          }
+        } else if (pc.connectionState === 'connecting') {
+          console.log('[WebRTC] Connecting...')
+        } else if (pc.connectionState === 'disconnected') {
+          console.warn('[WebRTC] Disconnected')
+        } else if (pc.connectionState === 'failed') {
+          console.error('[WebRTC] ❌ Connection failed!')
           cleanupWebRTC()
+        } else if (pc.connectionState === 'closed') {
+          console.log('[WebRTC] Connection closed')
+          cleanupWebRTC()
+        }
+      }
+      
+      // Also monitor ICE connection state
+      pc.oniceconnectionstatechange = () => {
+        console.log('[WebRTC] ICE connection state:', pc.iceConnectionState)
+        if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+          console.log('[WebRTC] ✅ ICE connection established!')
+          // Force video play when ICE connects
+          if (videoRef.current && videoRef.current.srcObject) {
+            setTimeout(() => {
+              if (videoRef.current) {
+                videoRef.current.play().catch(console.error)
+              }
+            }, 100)
+          }
+        } else if (pc.iceConnectionState === 'failed') {
+          console.error('[WebRTC] ❌ ICE connection failed!')
         }
       }
       
