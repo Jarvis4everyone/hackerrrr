@@ -160,10 +160,25 @@ async def get_stream_status(pc_id: str):
     has_stream = webrtc_service.has_active_stream(pc_id)
     is_connected = manager.is_connected(pc_id)
     
+    # Get connection state info
+    pc_connection = webrtc_service.peer_connections.get(pc_id)
+    connection_state = None
+    ice_state = None
+    has_tracks = False
+    
+    if pc_connection:
+        connection_state = pc_connection.connectionState
+        ice_state = pc_connection.iceConnectionState
+        pc_tracks = webrtc_service.get_pc_tracks(pc_id)
+        has_tracks = len(pc_tracks) > 0
+    
     return {
         "pc_id": pc_id,
         "has_active_stream": has_stream,
         "stream_type": stream_type,
-        "connected": is_connected
+        "connected": is_connected,
+        "connection_state": connection_state,
+        "ice_connection_state": ice_state,
+        "has_tracks": has_tracks
     }
 
