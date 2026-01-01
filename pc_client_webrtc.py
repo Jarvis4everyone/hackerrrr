@@ -64,8 +64,24 @@ class PCClientWebRTC:
             logger.error("[!] WebRTC not available")
             return None
         
+        # Use multiple STUN servers for better NAT traversal
+        # Note: For cloud deployments (like Render), you may need TURN servers
+        # when both peers are behind NAT. Free TURN servers are available at:
+        # - https://www.metered.ca/tools/openrelay/
+        # - Or use a paid TURN service
         configuration = RTCConfiguration(
-            iceServers=[RTCIceServer(urls=["stun:stun.l.google.com:19302"])]
+            iceServers=[
+                RTCIceServer(urls=["stun:stun.l.google.com:19302"]),
+                RTCIceServer(urls=["stun:stun1.l.google.com:19302"]),
+                RTCIceServer(urls=["stun:stun2.l.google.com:19302"]),
+                # Add TURN server if available via environment variables
+                # Example:
+                # RTCIceServer(
+                #     urls=["turn:turnserver.com:3478"],
+                #     username=os.getenv("TURN_USERNAME", ""),
+                #     credential=os.getenv("TURN_PASSWORD", "")
+                # )
+            ]
         )
         
         pc = RTCPeerConnection(configuration=configuration)

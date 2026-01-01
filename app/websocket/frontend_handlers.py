@@ -88,8 +88,13 @@ async def handle_frontend_websocket(websocket: WebSocket, pc_id: str, stream_typ
         try:
             from aiortc import RTCPeerConnection, RTCSessionDescription, RTCConfiguration, RTCIceServer, RTCIceCandidate
             
+            # Use multiple STUN servers for better NAT traversal
             configuration = RTCConfiguration(
-                iceServers=[RTCIceServer(urls=["stun:stun.l.google.com:19302"])]
+                iceServers=[
+                    RTCIceServer(urls=["stun:stun.l.google.com:19302"]),
+                    RTCIceServer(urls=["stun:stun1.l.google.com:19302"]),
+                    RTCIceServer(urls=["stun:stun2.l.google.com:19302"]),
+                ]
             )
             frontend_pc = RTCPeerConnection(configuration=configuration)
             

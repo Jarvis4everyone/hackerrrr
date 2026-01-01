@@ -57,8 +57,15 @@ class WebRTCService:
         await self.stop_stream(pc_id)
         
         # Create peer connection with STUN servers
+        # For cloud deployment, we need multiple STUN servers for better NAT traversal
         configuration = RTCConfiguration(
-            iceServers=[RTCIceServer(urls=["stun:stun.l.google.com:19302"])]
+            iceServers=[
+                RTCIceServer(urls=["stun:stun.l.google.com:19302"]),
+                RTCIceServer(urls=["stun:stun1.l.google.com:19302"]),
+                RTCIceServer(urls=["stun:stun2.l.google.com:19302"]),
+                # Add TURN server if available via environment variable
+                # RTCIceServer(urls=["turn:turnserver.com:3478"], username="user", credential="pass")
+            ]
         )
         
         pc = RTCPeerConnection(configuration=configuration)
