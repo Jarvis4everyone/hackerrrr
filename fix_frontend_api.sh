@@ -15,7 +15,7 @@ cd ~/h1x1/hackingpanel/frontend
 # Actually, looking at the code, it uses baseURL, so we need to set it to the nginx proxy
 
 cat > .env <<'EOF'
-VITE_API_URL=http://93.127.195.74/api
+VITE_API_URL=http://93.127.195.74
 EOF
 
 # Or use relative path - but vite needs full URL for env vars
