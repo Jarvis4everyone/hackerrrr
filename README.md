@@ -80,25 +80,9 @@ MONGODB_DB_NAME=remote_script_server
 
 ## Quick Start
 
-### Pull Latest Code and Run Both Servers
+### Run Both Servers (Automatically Pulls Latest Code)
 
-1. **Pull the latest code from GitHub:**
-```bash
-git pull origin main
-```
-
-2. **Install/Update dependencies (if needed):**
-```bash
-# Backend dependencies
-pip install -r requirements.txt
-
-# Frontend dependencies
-cd frontend
-npm install
-cd ..
-```
-
-3. **Run both backend and frontend together:**
+Simply run:
 ```bash
 ./start.sh
 ```
@@ -108,11 +92,26 @@ Or on Windows (using Git Bash):
 bash start.sh
 ```
 
-This will start:
-- **Backend** on `http://localhost:8000`
-- **Frontend** on `http://localhost:3000`
+**What the script does:**
+1. ✅ **Automatically pulls latest code** from GitHub (`git pull origin main`)
+2. ✅ **Checks if servers are already running** (won't start duplicates)
+3. ✅ **Activates virtual environment** (`.venv`) if it exists
+4. ✅ **Starts backend server** on `http://localhost:8000`
+5. ✅ **Starts frontend server** on `http://localhost:3000`
 
 Press `Ctrl+C` to stop both servers.
+
+**Note:** The script automatically pulls the latest code before starting, so you always have the most recent version. If you need to install/update dependencies:
+
+```bash
+# Backend dependencies
+pip install -r requirements.txt
+
+# Frontend dependencies
+cd frontend
+npm install
+cd ..
+```
 
 ## Running the Server
 
