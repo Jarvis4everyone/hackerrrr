@@ -51,8 +51,14 @@ const Camera = () => {
       const isConnecting = ws && ws.readyState === WebSocket.CONNECTING
       
       if (!isConnected && !isConnecting && !connectingRef.current && connectionState === 'disconnected') {
-        console.log('[WebRTC] Stream detected as active, initiating connection...')
-        connectToStream(selectedPC)
+        console.log('[WebRTC] Stream detected as active, waiting a moment for PC to set up track...')
+        // Wait 2 seconds to give PC client time to set up the video track
+        setTimeout(() => {
+          if (streamStatus?.has_active_stream && connectionState === 'disconnected') {
+            console.log('[WebRTC] Initiating connection...')
+            connectToStream(selectedPC)
+          }
+        }, 2000)
       }
     }
   }, [streamStatus, selectedPC, connectionState])
@@ -280,8 +286,21 @@ const Camera = () => {
         }
       } else if (data.type === 'webrtc_error') {
         console.error('[WebRTC] Error from server:', data.message)
-        setConnectionState('error')
-        cleanupWebRTC()
+        // If error is about track not ready, retry after a delay
+        if (data.message && data.message.includes('not available') && data.message.includes('yet')) {
+          console.log('[WebRTC] Track not ready yet, will retry in 3 seconds...')
+          setConnectionState('disconnected')
+          cleanupWebRTC()
+          setTimeout(() => {
+            if (streamStatus?.has_active_stream && connectionState === 'disconnected') {
+              console.log('[WebRTC] Retrying connection...')
+              connectToStream(pcId)
+            }
+          }, 3000)
+        } else {
+          setConnectionState('error')
+          cleanupWebRTC()
+        }
       }
     } catch (error) {
       console.error('[WebRTC] Error handling signaling message:', error)

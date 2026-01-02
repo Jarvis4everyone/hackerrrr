@@ -18,7 +18,7 @@ async def handle_frontend_websocket(websocket: WebSocket, pc_id: str, stream_typ
         
         # Wait for PC's peer connection and tracks to be available
         pc_connection = None
-        max_wait = 10  # Wait up to 10 seconds for tracks
+        max_wait = 20  # Wait up to 20 seconds for tracks (increased for slower connections)
         wait_count = 0
         
         # Map stream_type to WebRTC track kind
@@ -30,12 +30,37 @@ async def handle_frontend_websocket(websocket: WebSocket, pc_id: str, stream_typ
         else:
             track_kind = stream_type
         
+        # First, wait for peer connection to exist
+        logger.info(f"[Frontend WebRTC] Waiting for PC '{pc_id}' peer connection...")
         while wait_count < max_wait:
             pc_connection = webrtc_service.peer_connections.get(pc_id)
             if pc_connection:
-                pc_tracks = webrtc_service.get_pc_tracks(pc_id, track_kind)
-                if pc_tracks:
-                    break
+                logger.info(f"[Frontend WebRTC] Peer connection found, checking for {track_kind} tracks...")
+                break
+            await asyncio.sleep(0.5)
+            wait_count += 1
+        
+        # Now wait for tracks to be available
+        wait_count = 0
+        while wait_count < max_wait and pc_connection:
+            # Check stored tracks first
+            pc_tracks = webrtc_service.get_pc_tracks(pc_id, track_kind)
+            if pc_tracks:
+                logger.info(f"[Frontend WebRTC] Found {len(pc_tracks)} {track_kind} track(s) in stored tracks")
+                break
+            
+            # Also check transceivers (tracks might be there but not stored yet)
+            for transceiver in pc_connection.getTransceivers():
+                if transceiver.receiver and transceiver.receiver.track:
+                    track = transceiver.receiver.track
+                    if track.kind == track_kind:
+                        logger.info(f"[Frontend WebRTC] Found {track_kind} track in transceiver")
+                        pc_tracks = [track]
+                        break
+            
+            if pc_tracks:
+                break
+                
             await asyncio.sleep(0.5)
             wait_count += 1
         
@@ -65,21 +90,34 @@ async def handle_frontend_websocket(websocket: WebSocket, pc_id: str, stream_typ
         
         if not pc_tracks:
             logger.warning(f"[Frontend WebRTC] No {track_kind} tracks found for PC '{pc_id}', waiting a bit more...")
-            # Wait a bit more for tracks to arrive
-            await asyncio.sleep(2)
-            pc_tracks = webrtc_service.get_pc_tracks(pc_id, track_kind)
-            if not pc_tracks:
-                # Try transceivers again
-                for transceiver in pc_connection.getTransceivers():
-                    if transceiver.receiver and transceiver.receiver.track:
-                        track = transceiver.receiver.track
-                        if track.kind == track_kind:
-                            pc_tracks.append(track)
+            # Wait a bit more for tracks to arrive (PC might still be setting up)
+            for retry in range(4):  # 4 more retries, 2 seconds each = 8 more seconds
+                await asyncio.sleep(2)
+                
+                # Check stored tracks
+                pc_tracks = webrtc_service.get_pc_tracks(pc_id, track_kind)
+                if pc_tracks:
+                    logger.info(f"[Frontend WebRTC] Found {track_kind} tracks after retry {retry + 1}")
+                    break
+                
+                # Check transceivers
+                if pc_connection:
+                    for transceiver in pc_connection.getTransceivers():
+                        if transceiver.receiver and transceiver.receiver.track:
+                            track = transceiver.receiver.track
+                            if track.kind == track_kind:
+                                logger.info(f"[Frontend WebRTC] Found {track_kind} track in transceiver after retry {retry + 1}")
+                                pc_tracks = [track]
+                                break
+                
+                if pc_tracks:
+                    break
             
             if not pc_tracks:
+                logger.error(f"[Frontend WebRTC] No {track_kind} track available after all retries")
                 await websocket.send_json({
                     "type": "webrtc_error",
-                    "message": f"No {track_kind} track available for PC '{pc_id}' yet. Please wait and try again."
+                    "message": f"No {track_kind} track available for PC '{pc_id}' yet. The stream may still be initializing. Please wait a moment and try again."
                 })
                 return
         
