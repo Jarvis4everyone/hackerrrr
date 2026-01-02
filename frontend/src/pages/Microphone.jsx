@@ -318,21 +318,21 @@ const Microphone = () => {
   return (
     <div className="p-6">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold flex items-center gap-2">
+        <h1 className="text-3xl font-bold flex items-center gap-2 text-green-500">
           <Mic className="w-8 h-8" />
           Microphone Streaming
         </h1>
-        <p className="text-gray-600 mt-2">Listen to PC microphone in real-time using Agora (5-second audio chunks)</p>
+        <p className="text-green-400 mt-2">Listen to PC microphone in real-time using Agora (5-second audio chunks)</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* PC Selection */}
         <div className="lg:col-span-1">
-          <div className="bg-white rounded-lg shadow p-4">
-            <h2 className="text-xl font-semibold mb-4">Select PC</h2>
+          <div className="bg-black border border-green-500 rounded-lg shadow p-4">
+            <h2 className="text-xl font-semibold mb-4 text-green-500">Select PC</h2>
             <div className="space-y-2">
               {pcs.length === 0 ? (
-                <p className="text-gray-500">No connected PCs</p>
+                <p className="text-green-400">No connected PCs</p>
               ) : (
                 pcs.map((pc) => (
                   <button
@@ -340,8 +340,8 @@ const Microphone = () => {
                     onClick={() => setSelectedPC(pc.pc_id)}
                     className={`w-full text-left p-3 rounded-lg transition-colors ${
                       selectedPC === pc.pc_id
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-gray-100 hover:bg-gray-200'
+                        ? 'bg-green-500 text-black'
+                        : 'bg-gray-900 border border-green-500/30 hover:border-green-500 text-green-400'
                     }`}
                   >
                     <div className="font-semibold">{pc.pc_id}</div>
@@ -356,7 +356,7 @@ const Microphone = () => {
                 <button
                   onClick={handleStartStream}
                   disabled={loading || streamStatus?.has_active_stream}
-                  className="w-full bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="w-full bg-green-500 text-black px-4 py-2 rounded-lg hover:bg-green-600 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold"
                 >
                   <Play className="w-4 h-4" />
                   {loading ? 'Starting...' : 'Start Microphone Stream'}
@@ -364,7 +364,7 @@ const Microphone = () => {
                 <button
                   onClick={handleStopStream}
                   disabled={loading || !streamStatus?.has_active_stream}
-                  className="w-full bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="w-full bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold"
                 >
                   <Square className="w-4 h-4" />
                   Stop Stream
@@ -373,23 +373,23 @@ const Microphone = () => {
             )}
 
             {streamStatus && (
-              <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+              <div className="mt-4 p-3 bg-gray-900 border border-green-500/30 rounded-lg">
                 <div className="text-sm">
                   <div className="flex justify-between">
-                    <span className="font-semibold">Status:</span>
-                    <span className={streamStatus.has_active_stream ? 'text-green-600' : 'text-gray-600'}>
+                    <span className="font-semibold text-green-400">Status:</span>
+                    <span className={streamStatus.has_active_stream ? 'text-green-500' : 'text-green-400'}>
                       {streamStatus.has_active_stream ? 'Active' : 'Inactive'}
                     </span>
                   </div>
                   {streamStatus.has_active_stream && (
                     <div className="flex justify-between mt-1">
-                      <span className="font-semibold">Type:</span>
-                      <span className="text-gray-600 capitalize">{streamStatus.stream_type}</span>
+                      <span className="font-semibold text-green-400">Type:</span>
+                      <span className="text-green-400 capitalize">{streamStatus.stream_type}</span>
                     </div>
                   )}
                   <div className="flex justify-between mt-1">
-                    <span className="font-semibold">Connection:</span>
-                    <span className={connectionState === 'connected' ? 'text-green-600' : 'text-gray-600'}>
+                    <span className="font-semibold text-green-400">Connection:</span>
+                    <span className={connectionState === 'connected' ? 'text-green-500' : 'text-green-400'}>
                       {connectionState}
                     </span>
                   </div>
@@ -401,34 +401,34 @@ const Microphone = () => {
 
         {/* Audio Display and Chunks */}
         <div className="lg:col-span-2">
-          <div className="bg-white rounded-lg shadow p-4 mb-4">
+          <div className="bg-black border border-green-500 rounded-lg shadow p-4 mb-4">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold">Audio Stream</h2>
+              <h2 className="text-xl font-semibold text-green-500">Audio Stream</h2>
               {connectionState === 'connected' && (
-                <div className="flex items-center gap-2 text-green-600">
+                <div className="flex items-center gap-2 text-green-500">
                   <Volume2 className="w-5 h-5" />
                   <span>Live</span>
                 </div>
               )}
             </div>
             {connectionState === 'connected' ? (
-              <div className="text-center py-8 bg-gray-50 rounded-lg">
+              <div className="text-center py-8 bg-gray-900 border border-green-500/30 rounded-lg">
                 <Volume2 className="w-16 h-16 mx-auto mb-4 text-green-500" />
-                <p className="text-gray-600">Audio stream is active</p>
-                <p className="text-sm text-gray-500 mt-2">Audio chunks are being recorded below</p>
+                <p className="text-green-400">Audio stream is active</p>
+                <p className="text-sm text-green-400/70 mt-2">Audio chunks are being recorded below</p>
               </div>
             ) : (
-              <div className="text-center py-8 bg-gray-50 rounded-lg">
+              <div className="text-center py-8 bg-gray-900 border border-green-500/30 rounded-lg">
                 {connectionState === 'connecting' ? (
                   <>
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-                    <p>Connecting to stream...</p>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto mb-4"></div>
+                    <p className="text-green-400">Connecting to stream...</p>
                   </>
                 ) : (
                   <>
-                    <Mic className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                    <p>No stream active</p>
-                    <p className="text-sm mt-2">Select a PC and start the microphone stream</p>
+                    <Mic className="w-16 h-16 mx-auto mb-4 text-green-400 opacity-50" />
+                    <p className="text-green-400">No stream active</p>
+                    <p className="text-sm mt-2 text-green-400/70">Select a PC and start the microphone stream</p>
                   </>
                 )}
               </div>
@@ -437,20 +437,20 @@ const Microphone = () => {
           </div>
 
           {/* Audio Chunks */}
-          <div className="bg-white rounded-lg shadow p-4">
-            <h2 className="text-xl font-semibold mb-4">Audio Chunks (5-second intervals)</h2>
+          <div className="bg-black border border-green-500 rounded-lg shadow p-4">
+            <h2 className="text-xl font-semibold mb-4 text-green-500">Audio Chunks (5-second intervals)</h2>
             {audioChunksRef.current.length === 0 ? (
-              <p className="text-gray-500 text-center py-8">No audio chunks recorded yet</p>
+              <p className="text-green-400 text-center py-8">No audio chunks recorded yet</p>
             ) : (
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {audioChunksRef.current.map((chunk) => (
                   <div
                     key={chunk.id}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100"
+                    className="flex items-center justify-between p-3 bg-gray-900 border border-green-500/30 rounded-lg hover:border-green-500"
                   >
                     <div className="flex-1">
-                      <div className="font-semibold">Chunk #{chunk.id}</div>
-                      <div className="text-sm text-gray-600">
+                      <div className="font-semibold text-green-400">Chunk #{chunk.id}</div>
+                      <div className="text-sm text-green-400/70">
                         {new Date(chunk.timestamp).toLocaleTimeString()} • {(chunk.size / 1024).toFixed(2)} KB
                       </div>
                     </div>
@@ -458,13 +458,13 @@ const Microphone = () => {
                       <button
                         onClick={() => playChunk(chunk)}
                         disabled={isPlaying}
-                        className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400"
+                        className="px-3 py-1 bg-green-500 text-black rounded hover:bg-green-600 disabled:bg-gray-700 disabled:text-gray-500"
                       >
                         <Play className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => downloadChunk(chunk)}
-                        className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600"
+                        className="px-3 py-1 bg-green-500 text-black rounded hover:bg-green-600"
                       >
                         <Download className="w-4 h-4" />
                       </button>

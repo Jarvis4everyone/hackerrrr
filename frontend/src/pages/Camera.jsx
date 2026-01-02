@@ -227,21 +227,21 @@ const Camera = () => {
   return (
     <div className="p-6">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold flex items-center gap-2">
+        <h1 className="text-3xl font-bold flex items-center gap-2 text-green-500">
           <CameraIcon className="w-8 h-8" />
           Camera Streaming
         </h1>
-        <p className="text-gray-600 mt-2">View PC camera feed in real-time using Agora</p>
+        <p className="text-green-400 mt-2">View PC camera feed in real-time using Agora</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* PC Selection */}
         <div className="lg:col-span-1">
-          <div className="bg-white rounded-lg shadow p-4">
-            <h2 className="text-xl font-semibold mb-4">Select PC</h2>
+          <div className="bg-black border border-green-500 rounded-lg shadow p-4">
+            <h2 className="text-xl font-semibold mb-4 text-green-500">Select PC</h2>
             <div className="space-y-2">
               {pcs.length === 0 ? (
-                <p className="text-gray-500">No connected PCs</p>
+                <p className="text-green-400">No connected PCs</p>
               ) : (
                 pcs.map((pc) => (
                   <button
@@ -249,8 +249,8 @@ const Camera = () => {
                     onClick={() => setSelectedPC(pc.pc_id)}
                     className={`w-full text-left p-3 rounded-lg transition-colors ${
                       selectedPC === pc.pc_id
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-gray-100 hover:bg-gray-200'
+                        ? 'bg-green-500 text-black'
+                        : 'bg-gray-900 border border-green-500/30 hover:border-green-500 text-green-400'
                     }`}
                   >
                     <div className="font-semibold">{pc.pc_id}</div>
@@ -265,7 +265,7 @@ const Camera = () => {
                 <button
                   onClick={handleStartStream}
                   disabled={loading || streamStatus?.has_active_stream}
-                  className="w-full bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="w-full bg-green-500 text-black px-4 py-2 rounded-lg hover:bg-green-600 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold"
                 >
                   <Play className="w-4 h-4" />
                   {loading ? 'Starting...' : 'Start Camera Stream'}
@@ -273,7 +273,7 @@ const Camera = () => {
                 <button
                   onClick={handleStopStream}
                   disabled={loading || !streamStatus?.has_active_stream}
-                  className="w-full bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="w-full bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold"
                 >
                   <Square className="w-4 h-4" />
                   Stop Stream
@@ -282,23 +282,23 @@ const Camera = () => {
             )}
 
             {streamStatus && (
-              <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+              <div className="mt-4 p-3 bg-gray-900 border border-green-500/30 rounded-lg">
                 <div className="text-sm">
                   <div className="flex justify-between">
-                    <span className="font-semibold">Status:</span>
-                    <span className={streamStatus.has_active_stream ? 'text-green-600' : 'text-gray-600'}>
+                    <span className="font-semibold text-green-400">Status:</span>
+                    <span className={streamStatus.has_active_stream ? 'text-green-500' : 'text-green-400'}>
                       {streamStatus.has_active_stream ? 'Active' : 'Inactive'}
                     </span>
                   </div>
                   {streamStatus.has_active_stream && (
                     <div className="flex justify-between mt-1">
-                      <span className="font-semibold">Type:</span>
-                      <span className="text-gray-600 capitalize">{streamStatus.stream_type}</span>
+                      <span className="font-semibold text-green-400">Type:</span>
+                      <span className="text-green-400 capitalize">{streamStatus.stream_type}</span>
                     </div>
                   )}
                   <div className="flex justify-between mt-1">
-                    <span className="font-semibold">Connection:</span>
-                    <span className={connectionState === 'connected' ? 'text-green-600' : 'text-gray-600'}>
+                    <span className="font-semibold text-green-400">Connection:</span>
+                    <span className={connectionState === 'connected' ? 'text-green-500' : 'text-green-400'}>
                       {connectionState}
                     </span>
                   </div>
