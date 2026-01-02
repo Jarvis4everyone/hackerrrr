@@ -51,17 +51,17 @@ export default defineConfig(({ mode }) => {
   const wsUrl = apiUrl.replace('http://', 'ws://').replace('https://', 'wss://')
   
   return {
-    plugins: [react()],
-    server: {
+  plugins: [react()],
+  server: {
       port: parseInt(process.env.PORT || '3000'),
-      proxy: {
-        '/api': {
+    proxy: {
+      '/api': {
           target: apiUrl,
-          changeOrigin: true
-        },
-        '/ws': {
+        changeOrigin: true
+      },
+      '/ws': {
           target: wsUrl,
-          ws: true
+        ws: true
         }
       }
     },

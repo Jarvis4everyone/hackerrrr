@@ -111,11 +111,6 @@ class Settings(BaseSettings):
     WS_HEARTBEAT_TIMEOUT: int = 30
     WS_PING_INTERVAL: int = 30
     
-    # Agora Configuration
-    AGORA_APP_ID: str = os.getenv("AGORA_APP_ID", "7b3640aaf0394f8d809829db4abbe902")
-    AGORA_APP_CERTIFICATE: str = os.getenv("AGORA_APP_CERTIFICATE", "15b63fe200b44aa5a2428ace9d857ba4")
-    AGORA_TEMP_TOKEN: str = os.getenv("AGORA_TEMP_TOKEN", "007eJxTYIgsCZObte2wn++EMNMq9icLi4NZnXrkkzFykwmCcZm5kYJCamGRhbmqRZpFgYWFoYWaYkmSQmJaVaGhhtzw3PbAhkZLh3I5qVkQECQXwmhgpDBgYA3Xga0Q==")
-    
     # Server URL (from .env, used in scripts)
     # Note: .env file uses "Serverurl" (case-sensitive)
     SERVER_URL: Optional[str] = None

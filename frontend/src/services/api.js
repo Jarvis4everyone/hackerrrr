@@ -143,13 +143,6 @@ export const getStreamStatus = async (pcId) => {
   return response.data
 }
 
-export const getSubscriberToken = async (pcId, streamType, uid = 0) => {
-  const response = await api.get(`/api/streaming/${pcId}/token`, {
-    params: { stream_type: streamType, uid }
-  })
-  return response.data
-}
-
 // Executions API
 export const getExecutions = async (limit = 100) => {
   const response = await api.get('/api/executions', {

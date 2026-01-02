@@ -22,8 +22,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Agora logging configuration
-logging.getLogger('agora').setLevel(logging.INFO)
+# Reduce verbosity of aioice (WebRTC ICE) logs - these are just informational
+logging.getLogger('aioice.ice').setLevel(logging.WARNING)
+
+# Suppress noisy aioice warnings about link-local addresses
+logging.getLogger('aioice.ice').setLevel(logging.WARNING)
 
 
 @asynccontextmanager
@@ -101,7 +104,12 @@ async def websocket_endpoint(websocket: WebSocket, pc_id: str):
     """WebSocket endpoint for PC connections"""
     await handle_websocket_connection(websocket, pc_id)
 
-# WebSocket endpoint removed - Agora uses direct token-based connection
+# WebSocket endpoint for frontend WebRTC signaling
+@app.websocket("/ws/frontend/{pc_id}/{stream_type}")
+async def frontend_websocket_endpoint(websocket: WebSocket, pc_id: str, stream_type: str):
+    """WebSocket endpoint for frontend WebRTC signaling"""
+    from app.websocket.frontend_handlers import handle_frontend_websocket
+    await handle_frontend_websocket(websocket, pc_id, stream_type)
 
 # WebSocket endpoint for frontend terminal sessions
 @app.websocket("/ws/terminal/{pc_id}/{session_id}")

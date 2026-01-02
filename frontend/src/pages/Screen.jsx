@@ -1,7 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { MonitorSpeaker, Play, Square, Monitor } from 'lucide-react'
 import { getPCs, startScreenStream, stopStream, getStreamStatus } from '../services/api'
-import AgoraRTC from 'agora-rtc-sdk-ng'
 
 // Get API URL from environment or construct from current location
 let API_BASE_URL = import.meta.env.VITE_API_URL
@@ -23,24 +22,27 @@ if (!API_BASE_URL && import.meta.env.PROD) {
 
 API_BASE_URL = API_BASE_URL.replace(/\/$/, '')
 
+const WS_BASE_URL = API_BASE_URL 
+  ? API_BASE_URL.replace('http://', 'ws://').replace('https://', 'wss://')
+  : (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.host
+
 const Screen = () => {
   const [pcs, setPCs] = useState([])
   const [selectedPC, setSelectedPC] = useState(null)
   const [streamStatus, setStreamStatus] = useState(null)
   const [loading, setLoading] = useState(false)
   const [connectionState, setConnectionState] = useState('disconnected')
-  const [errorMessage, setErrorMessage] = useState(null)
   const videoRef = useRef(null)
-  const clientRef = useRef(null)
-  const remoteTrackRef = useRef(null)
-  const retryBlockedRef = useRef(false)
+  const peerConnectionRef = useRef(null)
+  const wsRef = useRef(null)
+  const connectingRef = useRef(false)
 
   useEffect(() => {
     loadPCs()
     const interval = setInterval(loadPCs, 3000)
     return () => {
       clearInterval(interval)
-      cleanupAgora()
+      cleanupWebRTC()
     }
   }, [])
 
@@ -50,49 +52,48 @@ const Screen = () => {
       const interval = setInterval(checkStreamStatus, 2000)
       return () => clearInterval(interval)
     } else {
-      cleanupAgora()
+      cleanupWebRTC()
     }
   }, [selectedPC])
 
   useEffect(() => {
+    if (connectionState === 'connected' && videoRef.current) {
+      const video = videoRef.current
+      if (video.srcObject) {
+        video.play().catch((error) => {
+          console.error('[WebRTC] Error auto-playing video:', error)
+        })
+      }
+    }
+  }, [connectionState])
+
+  useEffect(() => {
     if (streamStatus?.has_active_stream && streamStatus?.stream_type === 'screen' && selectedPC) {
-      if (connectionState === 'disconnected' && !retryBlockedRef.current) {
-        console.log('[Agora] Stream detected as active, connecting...')
+      const ws = wsRef.current
+      const isConnected = ws && ws.readyState === WebSocket.OPEN
+      const isConnecting = ws && ws.readyState === WebSocket.CONNECTING
+      
+      if (!isConnected && !isConnecting && !connectingRef.current && connectionState === 'disconnected') {
+        console.log('[WebRTC] Stream detected as active, initiating connection...')
         connectToStream(selectedPC)
       }
-    } else if (!streamStatus?.has_active_stream) {
-      cleanupAgora()
-      retryBlockedRef.current = false
-      setErrorMessage(null)
     }
   }, [streamStatus, selectedPC, connectionState])
 
-  const cleanupAgora = async () => {
-    try {
-      if (remoteTrackRef.current) {
-        try {
-          remoteTrackRef.current.stop()
-        } catch (e) {
-          // Track may already be stopped
-        }
-        remoteTrackRef.current = null
-      }
-      if (clientRef.current) {
-        try {
-          await clientRef.current.leave()
-          await clientRef.current.release()
-        } catch (e) {
-          // Client may already be released
-        }
-        clientRef.current = null
-      }
-      if (videoRef.current) {
-        videoRef.current.srcObject = null
-      }
-      setConnectionState('disconnected')
-    } catch (error) {
-      console.error('[Agora] Error during cleanup:', error)
+  const cleanupWebRTC = () => {
+    connectingRef.current = false
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close()
+      peerConnectionRef.current = null
     }
+    if (wsRef.current) {
+      wsRef.current.close()
+      wsRef.current = null
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null
+    }
+    setConnectionState('disconnected')
   }
 
   const loadPCs = async () => {
@@ -109,103 +110,208 @@ const Screen = () => {
     try {
       const status = await getStreamStatus(selectedPC)
       setStreamStatus(status)
+      
+      if (status.has_active_stream && status.stream_type === 'screen') {
+        const ws = wsRef.current
+        const isConnected = ws && ws.readyState === WebSocket.OPEN
+        const isConnecting = ws && ws.readyState === WebSocket.CONNECTING
+        
+        if (!isConnected && !isConnecting && !connectingRef.current) {
+          console.log('[WebRTC] Stream is active, connecting to frontend WebSocket...')
+          connectingRef.current = true
+          connectToStream(selectedPC)
+        }
+      } else if (!status.has_active_stream) {
+        if (wsRef.current || peerConnectionRef.current) {
+          cleanupWebRTC()
+        }
+      }
     } catch (error) {
       console.error('Error checking stream status:', error)
     }
   }
 
   const connectToStream = async (pcId) => {
-    if (clientRef.current) {
-      console.log('[Agora] Already connected, skipping...')
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      console.log('[WebRTC] Already connected, skipping...')
       return
     }
-
+    if (wsRef.current && wsRef.current.readyState === WebSocket.CONNECTING) {
+      console.log('[WebRTC] Connection in progress, skipping...')
+      return
+    }
+    
     try {
       setConnectionState('connecting')
+      cleanupWebRTC()
+      
+      const wsUrl = `${WS_BASE_URL}/ws/frontend/${pcId}/screen`
+      console.log('[WebRTC] Connecting to:', wsUrl)
+      const ws = new WebSocket(wsUrl)
+      wsRef.current = ws
 
-      // Get subscriber token from backend
-      const response = await fetch(`${API_BASE_URL}/api/streaming/${pcId}/token?stream_type=screen&uid=0`)
-      if (!response.ok) {
-        throw new Error('Failed to get Agora token')
+      ws.onopen = () => {
+        console.log('[WebRTC] WebSocket connected for signaling')
+        connectingRef.current = false
       }
-      const data = await response.json()
-      const { channel_name, token, uid, app_id } = data.agora
 
-      console.log('[Agora] Connecting to channel:', channel_name)
-
-      // Create Agora client
-      const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' })
-      clientRef.current = client
-
-      // Set up event handlers
-      client.on('user-published', async (user, mediaType) => {
-        console.log('[Agora] User published:', user.uid, mediaType)
+      ws.onmessage = async (event) => {
         try {
-          if (mediaType === 'video') {
-            await client.subscribe(user, mediaType)
-            const remoteVideoTrack = user.videoTrack
-            if (remoteVideoTrack && videoRef.current) {
-              remoteTrackRef.current = remoteVideoTrack
-              remoteVideoTrack.play(videoRef.current)
-              setConnectionState('connected')
-              console.log('[Agora] ✅ Screen track subscribed and playing')
-            }
-          }
+          const data = JSON.parse(event.data)
+          console.log('[WebRTC] Received message:', data.type)
+          await handleSignalingMessage(data, pcId)
         } catch (error) {
-          console.error('[Agora] Error handling user-published:', error)
-          setConnectionState('error')
+          console.error('[WebRTC] Error handling message:', error)
         }
-      })
+      }
 
-      client.on('user-unpublished', async (user, mediaType) => {
-        console.log('[Agora] User unpublished:', user.uid, mediaType)
-        try {
-          if (mediaType === 'video') {
-            const remoteVideoTrack = user.videoTrack
-            if (remoteVideoTrack) {
-              remoteVideoTrack.stop()
-            }
-            if (videoRef.current) {
-              videoRef.current.srcObject = null
-            }
-            setConnectionState('disconnected')
+      ws.onerror = (error) => {
+        console.error('[WebRTC] WebSocket error:', error)
+        setConnectionState('error')
+        if (trackCheckInterval) {
+          clearInterval(trackCheckInterval)
+        }
+      }
+
+      const pc = new RTCPeerConnection({
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' }
+        ]
+      })
+      peerConnectionRef.current = pc
+      
+      let trackCheckInterval = null
+      
+      ws.onclose = (event) => {
+        if (trackCheckInterval) {
+          clearInterval(trackCheckInterval)
+          trackCheckInterval = null
+        }
+        console.log('[WebRTC] WebSocket closed', event.code, event.reason)
+        connectingRef.current = false
+        setConnectionState('disconnected')
+      }
+
+      pc.ontrack = (event) => {
+        console.log('[WebRTC] ===== TRACK RECEIVED =====')
+        console.log('[WebRTC] Track kind:', event.track.kind)
+        
+        if (event.track.kind === 'video') {
+          console.log('[WebRTC] Video track received!')
+          
+          if (!videoRef.current) {
+            console.error('[WebRTC] videoRef.current is null!')
+            return
           }
-        } catch (error) {
-          console.error('[Agora] Error handling user-unpublished:', error)
-        }
-      })
-
-      client.on('connection-state-change', (curState, revState) => {
-        console.log('[Agora] Connection state changed:', curState, revState)
-        if (curState === 'CONNECTED') {
+          
+          const stream = event.streams[0] || new MediaStream([event.track])
+          console.log('[WebRTC] Setting video srcObject')
+          
+          videoRef.current.srcObject = stream
           setConnectionState('connected')
-        } else if (curState === 'DISCONNECTED') {
-          setConnectionState('disconnected')
+          
+          setTimeout(() => {
+            if (videoRef.current) {
+              console.log('[WebRTC] Attempting to play video...')
+              videoRef.current.play().then(() => {
+                console.log('[WebRTC] ✅ Video is playing successfully!')
+                console.log('[WebRTC] Video dimensions:', videoRef.current.videoWidth, 'x', videoRef.current.videoHeight)
+              }).catch((error) => {
+                console.error('[WebRTC] ❌ Error playing video:', error)
+              })
+            }
+          }, 100)
         }
-      })
+      }
 
-      // Join channel
-      await client.join(app_id, channel_name, token, uid)
-      console.log('[Agora] ✅ Joined channel successfully')
-      setErrorMessage(null)
-      retryBlockedRef.current = false
+      pc.onicecandidate = (event) => {
+        if (event.candidate && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'webrtc_ice_candidate',
+            candidate: {
+              candidate: event.candidate.candidate,
+              sdpMLineIndex: event.candidate.sdpMLineIndex,
+              sdpMid: event.candidate.sdpMid
+            }
+          }))
+        }
+      }
+
+      pc.onconnectionstatechange = () => {
+        console.log('[WebRTC] Connection state changed:', pc.connectionState)
+        setConnectionState(pc.connectionState)
+        
+        if (pc.connectionState === 'connected') {
+          console.log('[WebRTC] Connection established!')
+        }
+        
+        if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+          cleanupWebRTC()
+        }
+      }
+      
+      trackCheckInterval = setInterval(() => {
+        if (pc.connectionState === 'connected') {
+          const receivers = pc.getReceivers()
+          const videoReceivers = receivers.filter(r => r.track && r.track.kind === 'video')
+          if (videoReceivers.length > 0) {
+            console.log('[WebRTC] Found', videoReceivers.length, 'video receiver(s)')
+            if (videoRef.current && !videoRef.current.srcObject) {
+              console.log('[WebRTC] Found video receiver but no srcObject, setting it now...')
+              const stream = new MediaStream(videoReceivers.map(r => r.track).filter(Boolean))
+              videoRef.current.srcObject = stream
+              videoRef.current.play().catch(console.error)
+            }
+          }
+        }
+      }, 1000)
+
+      console.log('[WebRTC] Waiting for offer from server...')
 
     } catch (error) {
-      console.error('[Agora] Error connecting to stream:', error)
-      const errorMsg = error.message || error.toString()
-      
-      // Check for invalid App ID error
-      if (errorMsg.includes('invalid vendor key') || errorMsg.includes('can not find appid') || errorMsg.includes('CAN_NOT_GET_GATEWAY_SERVER')) {
-        setErrorMessage('Invalid Agora App ID. Please check your Agora credentials in the backend configuration.')
-        retryBlockedRef.current = true // Block retries
-        setConnectionState('error')
-        await cleanupAgora()
-        return
-      }
-      
+      console.error('[WebRTC] Error connecting to stream:', error)
+      connectingRef.current = false
       setConnectionState('error')
-      setErrorMessage('Failed to connect to Agora stream. Please try again.')
-      await cleanupAgora()
+      cleanupWebRTC()
+    }
+  }
+
+  const handleSignalingMessage = async (data, pcId) => {
+    const pc = peerConnectionRef.current
+    if (!pc) return
+
+    try {
+      if (data.type === 'webrtc_offer') {
+        await pc.setRemoteDescription(new RTCSessionDescription({
+          type: 'offer',
+          sdp: data.sdp
+        }))
+        
+        const answer = await pc.createAnswer()
+        await pc.setLocalDescription(answer)
+        
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({
+            type: 'webrtc_answer',
+            sdp: answer.sdp
+          }))
+        }
+        console.log('[WebRTC] Answer sent, connection in progress...')
+      } else if (data.type === 'webrtc_ice_candidate') {
+        if (data.candidate) {
+          await pc.addIceCandidate(new RTCIceCandidate({
+            candidate: data.candidate.candidate,
+            sdpMLineIndex: data.candidate.sdpMLineIndex,
+            sdpMid: data.candidate.sdpMid
+          }))
+        }
+      } else if (data.type === 'webrtc_error') {
+        console.error('[WebRTC] Error from server:', data.message)
+        setConnectionState('error')
+        cleanupWebRTC()
+      }
+    } catch (error) {
+      console.error('[WebRTC] Error handling signaling message:', error)
     }
   }
 
@@ -215,17 +321,11 @@ const Screen = () => {
       return
     }
     setLoading(true)
-    setErrorMessage(null)
-    retryBlockedRef.current = false
     try {
       await startScreenStream(selectedPC)
-      setTimeout(async () => {
-        await checkStreamStatus()
-      }, 1000)
+      await checkStreamStatus()
     } catch (error) {
-      const errorMsg = error.response?.data?.detail || error.message
-      setErrorMessage('Error starting screen stream: ' + errorMsg)
-      alert('Error starting screen stream: ' + errorMsg)
+      alert('Error starting screen stream: ' + (error.response?.data?.detail || error.message))
     } finally {
       setLoading(false)
     }
@@ -234,11 +334,9 @@ const Screen = () => {
   const handleStopStream = async () => {
     if (!selectedPC) return
     setLoading(true)
-    setErrorMessage(null)
-    retryBlockedRef.current = false
     try {
       await stopStream(selectedPC)
-      await cleanupAgora()
+      cleanupWebRTC()
       await checkStreamStatus()
     } catch (error) {
       alert('Error stopping stream: ' + (error.response?.data?.detail || error.message))
@@ -247,124 +345,170 @@ const Screen = () => {
     }
   }
 
+  const isStreaming = streamStatus?.has_active_stream && streamStatus?.stream_type === 'screen'
+
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold flex items-center gap-2 text-green-500">
-          <MonitorSpeaker className="w-8 h-8" />
-          Screen Sharing
-        </h1>
-        <p className="text-green-400 mt-2">View PC screen in real-time using Agora</p>
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl sm:text-2xl font-mono text-hack-green">Screen Share</h2>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* PC Selection */}
-        <div className="lg:col-span-1">
-          <div className="bg-black border border-green-500 rounded-lg shadow p-4">
-            <h2 className="text-xl font-semibold mb-4 text-green-500">Select PC</h2>
-            <div className="space-y-2">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
+        {/* Left Sidebar - PC Selection & Controls */}
+        <div className="lg:col-span-4 space-y-4 sm:space-y-6">
+          {/* PC Selection Card */}
+          <div className="bg-hack-dark/90 backdrop-blur-sm border border-gray-800 rounded-xl p-4 sm:p-6 shadow-xl">
+            <div className="flex items-center gap-3 mb-4 sm:mb-6">
+              <Monitor className="text-hack-green" size={20} />
+              <h2 className="text-base sm:text-lg font-semibold text-white">Connected Devices</h2>
+            </div>
+            <div className="space-y-2 max-h-80 overflow-y-auto custom-scrollbar">
               {pcs.length === 0 ? (
-                <p className="text-green-400">No connected PCs</p>
+                <div className="text-center py-8">
+                  <p className="text-white/50 text-sm">No devices connected</p>
+                </div>
               ) : (
                 pcs.map((pc) => (
                   <button
                     key={pc.pc_id}
                     onClick={() => setSelectedPC(pc.pc_id)}
-                    className={`w-full text-left p-3 rounded-lg transition-colors ${
+                    className={`w-full text-left p-3 rounded-lg border transition-all ${
                       selectedPC === pc.pc_id
-                        ? 'bg-green-500 text-black'
-                        : 'bg-gray-900 border border-green-500/30 hover:border-green-500 text-green-400'
+                        ? 'bg-hack-green/20 border-hack-green text-hack-green'
+                        : 'bg-black/50 border-white/10 text-white hover:border-hack-green/30'
                     }`}
                   >
-                    <div className="font-semibold">{pc.pc_id}</div>
-                    <div className="text-sm opacity-75">{pc.hostname || 'Unknown'}</div>
+                    <div className="flex items-center gap-2">
+                      <Monitor size={16} />
+                      <span className="font-mono text-sm">{pc.pc_id}</span>
+                    </div>
                   </button>
                 ))
               )}
             </div>
+          </div>
 
-            {selectedPC && (
-              <div className="mt-4 space-y-2">
-                <button
-                  onClick={handleStartStream}
-                  disabled={loading || streamStatus?.has_active_stream}
-                  className="w-full bg-green-500 text-black px-4 py-2 rounded-lg hover:bg-green-600 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold"
-                >
-                  <Play className="w-4 h-4" />
-                  {loading ? 'Starting...' : 'Start Screen Share'}
-                </button>
-                <button
-                  onClick={handleStopStream}
-                  disabled={loading || !streamStatus?.has_active_stream}
-                  className="w-full bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold"
-                >
-                  <Square className="w-4 h-4" />
-                  Stop Stream
-                </button>
+          {/* Controls Card */}
+          {selectedPC && (
+            <div className="bg-hack-dark/90 backdrop-blur-sm border border-white/10 rounded-xl p-4 sm:p-6 shadow-xl">
+              <h3 className="text-base sm:text-lg font-semibold text-white mb-4">Controls</h3>
+              <div className="space-y-2">
+                {!isStreaming ? (
+                  <button
+                    onClick={handleStartStream}
+                    disabled={loading}
+                    className="w-full bg-hack-green/10 hover:bg-hack-green/20 border border-hack-green/30 text-hack-green px-4 py-3 rounded-lg font-medium transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Play size={18} />
+                    Start Screen Share
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleStopStream}
+                    disabled={loading}
+                    className="w-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg font-medium transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Square size={18} />
+                    Stop Stream
+                  </button>
+                )}
               </div>
-            )}
+            </div>
+          )}
 
-            {streamStatus && (
-              <div className="mt-4 p-3 bg-gray-900 border border-green-500/30 rounded-lg">
-                <div className="text-sm">
-                  <div className="flex justify-between">
-                    <span className="font-semibold text-green-400">Status:</span>
-                    <span className={streamStatus.has_active_stream ? 'text-green-500' : 'text-green-400'}>
-                      {streamStatus.has_active_stream ? 'Active' : 'Inactive'}
-                    </span>
-                  </div>
-                  {streamStatus.has_active_stream && (
-                    <div className="flex justify-between mt-1">
-                      <span className="font-semibold text-green-400">Type:</span>
-                      <span className="text-green-400 capitalize">{streamStatus.stream_type}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between mt-1">
-                    <span className="font-semibold text-green-400">Connection:</span>
-                    <span className={connectionState === 'connected' ? 'text-green-500' : 'text-green-400'}>
-                      {connectionState}
-                    </span>
-                  </div>
+          {/* Status Card */}
+          {selectedPC && streamStatus && (
+            <div className="bg-hack-dark/90 backdrop-blur-sm border border-white/10 rounded-xl p-4 sm:p-6 shadow-xl">
+              <h3 className="text-base sm:text-lg font-semibold text-white mb-4">Status</h3>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-white/70 text-sm">Stream Type</span>
+                  <span className="text-hack-green font-mono text-sm">
+                    {streamStatus.stream_type || 'None'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-white/70 text-sm">Active</span>
+                  <span className={isStreaming ? 'text-hack-green font-mono text-sm' : 'text-white/50 font-mono text-sm'}>
+                    {isStreaming ? 'YES' : 'NO'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-white/70 text-sm">Connection</span>
+                  <span className={`font-mono text-xs uppercase ${
+                    connectionState === 'connected' ? 'text-hack-green' :
+                    connectionState === 'connecting' ? 'text-hack-green' :
+                    connectionState === 'error' ? 'text-red-400' :
+                    'text-white/50'
+                  }`}>
+                    {connectionState}
+                  </span>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
-        {/* Video Display */}
-        <div className="lg:col-span-2">
-          <div className="bg-black rounded-lg shadow overflow-hidden aspect-video">
-            {connectionState === 'connected' ? (
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                className="w-full h-full object-contain"
-              />
+        {/* Main Content - Video Display */}
+        <div className="lg:col-span-8">
+          <div className="bg-black backdrop-blur-sm border border-white/10 rounded-xl overflow-hidden shadow-xl">
+            {!selectedPC ? (
+              <div className="min-h-[300px] sm:min-h-[500px] flex items-center justify-center p-8">
+                <div className="text-center">
+                  <MonitorSpeaker className="mx-auto text-white/30 mb-4" size={48} />
+                  <p className="text-white font-medium">Select a PC to view screen</p>
+                </div>
+              </div>
+            ) : !isStreaming ? (
+              <div className="min-h-[300px] sm:min-h-[500px] flex items-center justify-center p-8">
+                <div className="text-center">
+                  <MonitorSpeaker className="mx-auto text-white/30 mb-4" size={48} />
+                  <p className="text-white font-medium">Screen share not active</p>
+                  <p className="text-white/50 text-sm mt-2">Click "Start Screen Share" to begin</p>
+                </div>
+              </div>
+            ) : connectionState === 'connecting' ? (
+              <div className="min-h-[300px] sm:min-h-[500px] flex items-center justify-center p-8">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-hack-green mx-auto mb-4"></div>
+                  <p className="text-white font-medium">Establishing WebRTC connection...</p>
+                </div>
+              </div>
             ) : (
-              <div className="w-full h-full flex flex-col items-center justify-center text-green-400 p-4">
-                {connectionState === 'connecting' ? (
-                  <>
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto mb-4"></div>
-                    <p>Connecting to stream...</p>
-                  </>
-                ) : connectionState === 'error' && errorMessage ? (
-                  <>
-                    <div className="text-red-500 mb-4 text-4xl">⚠️</div>
-                    <p className="text-red-500 font-semibold mb-2">Connection Error</p>
-                    <p className="text-sm text-center max-w-md">{errorMessage}</p>
-                    {errorMessage.includes('Invalid Agora App ID') && (
-                      <p className="text-xs mt-4 text-green-400/70 text-center max-w-md">
-                        Please verify your Agora App ID and Certificate in the backend environment variables.
-                      </p>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <Monitor className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                    <p>No stream active</p>
-                    <p className="text-sm mt-2">Select a PC and start the screen share</p>
-                  </>
+              <div className="relative w-full" style={{ aspectRatio: '16/9' }}>
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-contain bg-black"
+                  style={{ aspectRatio: '16/9' }}
+                  onLoadedMetadata={() => {
+                    console.log('[WebRTC] Video metadata loaded')
+                    if (videoRef.current) {
+                      videoRef.current.play().catch(console.error)
+                    }
+                  }}
+                  onCanPlay={() => {
+                    console.log('[WebRTC] Video can play')
+                    if (videoRef.current) {
+                      videoRef.current.play().catch(console.error)
+                    }
+                  }}
+                  onPlay={() => {
+                    console.log('[WebRTC] Video is playing')
+                  }}
+                  onError={(e) => {
+                    console.error('[WebRTC] Video error:', e)
+                  }}
+                />
+                {connectionState !== 'connected' && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-hack-green mx-auto mb-4"></div>
+                      <p className="text-white font-medium">Connecting...</p>
+                    </div>
+                  </div>
                 )}
               </div>
             )}

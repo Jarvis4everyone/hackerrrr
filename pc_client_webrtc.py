@@ -8,11 +8,9 @@ import os
 import sys
 import tempfile
 import socket
-import time
 from websockets import connect
 from websockets.exceptions import ConnectionClosed
 import logging
-import aiohttp
 
 # WebRTC imports (for Python client)
 try:
@@ -45,58 +43,6 @@ class PCClientWebRTC:
         self.peer_connection = None
         self.active_stream_type = None
         self.media_player = None
-        # TURN server configuration
-        self.metered_api_key = os.getenv("METERED_API_KEY", "4b7268b361c4e1a08789e6415026801bfb20")
-        self.metered_api_url = os.getenv("METERED_API_URL", "https://x1.metered.live/api/v1/turn/credentials")
-        # Cache for ICE servers
-        self._ice_servers_cache = None
-        self._ice_servers_cache_time = 0
-    
-    async def get_ice_servers(self):
-        """Get ICE servers with TURN support from Metered.ca"""
-        # Return cached servers if still valid (cache for 1 hour)
-        now = time.time()
-        if self._ice_servers_cache and (now - self._ice_servers_cache_time) < 3600:
-            return self._ice_servers_cache
-        
-        try:
-            # Try to fetch from Metered.ca API
-            api_url = f"{self.metered_api_url}?apiKey={self.metered_api_key}"
-            async with aiohttp.ClientSession() as session:
-                async with session.get(api_url, timeout=aiohttp.ClientTimeout(total=5)) as response:
-                    if response.status == 200:
-                        ice_servers_data = await response.json()
-                        if isinstance(ice_servers_data, list) and len(ice_servers_data) > 0:
-                            # Convert to RTCIceServer objects
-                            ice_servers = []
-                            for server in ice_servers_data:
-                                if isinstance(server, dict):
-                                    urls = server.get('urls')
-                                    if isinstance(urls, str):
-                                        urls = [urls]
-                                    ice_servers.append(RTCIceServer(
-                                        urls=urls,
-                                        username=server.get('username'),
-                                        credential=server.get('credential')
-                                    ))
-                            
-                            if ice_servers:
-                                logger.info(f"[WebRTC] Fetched {len(ice_servers)} TURN servers from Metered.ca")
-                                self._ice_servers_cache = ice_servers
-                                self._ice_servers_cache_time = now
-                                return ice_servers
-        except Exception as e:
-            logger.warning(f"[WebRTC] Failed to fetch TURN credentials, using STUN only: {e}")
-        
-        # Fallback to STUN servers
-        fallback_servers = [
-            RTCIceServer(urls=["stun:stun.l.google.com:19302"]),
-            RTCIceServer(urls=["stun:stun1.l.google.com:19302"]),
-            RTCIceServer(urls=["stun:stun2.l.google.com:19302"]),
-        ]
-        self._ice_servers_cache = fallback_servers
-        self._ice_servers_cache_time = now
-        return fallback_servers
     
     async def connect(self):
         """Connect to the server"""
@@ -113,15 +59,14 @@ class PCClientWebRTC:
             return False
     
     async def create_peer_connection(self):
-        """Create WebRTC peer connection with TURN server support"""
+        """Create WebRTC peer connection"""
         if not WEBRTC_AVAILABLE:
             logger.error("[!] WebRTC not available")
             return None
         
-        # Get ICE servers with TURN support
-        ice_servers = await self.get_ice_servers()
-        
-        configuration = RTCConfiguration(iceServers=ice_servers)
+        configuration = RTCConfiguration(
+            iceServers=[RTCIceServer(urls=["stun:stun.l.google.com:19302"])]
+        )
         
         pc = RTCPeerConnection(configuration=configuration)
         
