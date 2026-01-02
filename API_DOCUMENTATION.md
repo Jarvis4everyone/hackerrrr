@@ -955,12 +955,28 @@ if message_type == "start_stream":
 
 ### Agora SDK Installation
 
-**Python:**
+**Backend (Token Generation):**
+```bash
+pip install agora-token-builder
+```
+
+**Frontend (JavaScript/React):**
+```bash
+npm install agora-rtc-sdk-ng
+```
+
+**PC Client (Python):**
 ```bash
 pip install agora-python-sdk
 ```
 
-**Note:** The Agora Python SDK may require additional native dependencies. Refer to [Agora Python SDK Documentation](https://docs.agora.io/en/video-calling/get-started/get-started-sdk) for platform-specific installation instructions.
+**Important Notes:**
+- The Agora Python SDK requires native dependencies and may need additional setup
+- For Windows: May require Visual C++ Redistributable
+- For Linux: May require additional system libraries (libc6, libstdc++6, etc.)
+- For macOS: Usually works out of the box
+- Refer to [Agora Python SDK Documentation](https://docs.agora.io/en/video-calling/get-started/get-started-sdk) for platform-specific installation instructions
+- If the Python SDK is not available, the PC client will report an error but can still connect to the server (streaming just won't work)
 
 ### Important Notes
 

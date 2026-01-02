@@ -2,26 +2,34 @@
 Agora Service for managing video/audio streaming
 """
 import logging
-from typing import Optional, Dict, Callable
+import time
+from typing import Optional, Dict
+from app.config import settings
+
+logger = logging.getLogger(__name__)
+
+# Try to import Agora token builder
 try:
     from agora_token_builder import RtcTokenBuilder, Role
+    TOKEN_BUILDER_AVAILABLE = True
 except ImportError:
-    # Fallback: Use simple token generation if package not available
-    # In production, install: pip install agora-token-builder
+    TOKEN_BUILDER_AVAILABLE = False
     logger.warning("agora-token-builder not installed. Using fallback token generation.")
+    
+    # Fallback Role enum
     class Role:
         PUBLISHER = 1
         SUBSCRIBER = 2
     
+    # Fallback token builder
     class RtcTokenBuilder:
         @staticmethod
         def buildTokenWithUid(app_id, app_certificate, channel_name, uid, role, privilege_expired_ts):
-            # This is a placeholder - in production, use the actual agora-token-builder package
-            # For now, return the temp token from settings
-            return settings.AGORA_TEMP_TOKEN
-from app.config import settings
-
-logger = logging.getLogger(__name__)
+            # Return temp token as fallback
+            if settings.AGORA_TEMP_TOKEN:
+                logger.warning(f"[Agora] Using fallback temp token (install agora-token-builder for proper token generation)")
+                return settings.AGORA_TEMP_TOKEN
+            raise ValueError("No token available - install agora-token-builder or set AGORA_TEMP_TOKEN")
 
 
 class AgoraService:
@@ -47,26 +55,38 @@ class AgoraService:
             RTC token string
         """
         try:
-            current_timestamp = int(__import__('time').time())
+            current_timestamp = int(time.time())
             privilege_expired_ts = current_timestamp + expire_time
             
-            token = RtcTokenBuilder.buildTokenWithUid(
-                self.app_id,
-                self.app_certificate,
-                channel_name,
-                uid,
-                role,
-                privilege_expired_ts
-            )
+            if TOKEN_BUILDER_AVAILABLE:
+                token = RtcTokenBuilder.buildTokenWithUid(
+                    self.app_id,
+                    self.app_certificate,
+                    channel_name,
+                    uid,
+                    role,
+                    privilege_expired_ts
+                )
+                logger.info(f"[Agora] Generated token for channel '{channel_name}', uid={uid}, role={role.value if hasattr(role, 'value') else role}")
+            else:
+                # Use fallback
+                token = RtcTokenBuilder.buildTokenWithUid(
+                    self.app_id,
+                    self.app_certificate,
+                    channel_name,
+                    uid,
+                    role,
+                    privilege_expired_ts
+                )
+                logger.warning(f"[Agora] Using fallback token for channel '{channel_name}'")
             
-            logger.info(f"[Agora] Generated token for channel '{channel_name}', uid={uid}, role={role}")
             return token
             
         except Exception as e:
             logger.error(f"[Agora] Error generating token: {e}", exc_info=True)
             # Return temp token as fallback if provided
             if settings.AGORA_TEMP_TOKEN:
-                logger.warning(f"[Agora] Using fallback temp token")
+                logger.warning(f"[Agora] Using fallback temp token due to error")
                 return settings.AGORA_TEMP_TOKEN
             raise
     

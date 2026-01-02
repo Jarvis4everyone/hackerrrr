@@ -78,16 +78,28 @@ const Microphone = () => {
         chunkIntervalRef.current = null
       }
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-        mediaRecorderRef.current.stop()
+        try {
+          mediaRecorderRef.current.stop()
+        } catch (e) {
+          // Recorder may already be stopped
+        }
         mediaRecorderRef.current = null
       }
       if (remoteTrackRef.current) {
-        remoteTrackRef.current.stop()
-        remoteTrackRef.current.close()
+        try {
+          remoteTrackRef.current.stop()
+        } catch (e) {
+          // Track may already be stopped
+        }
         remoteTrackRef.current = null
       }
       if (clientRef.current) {
-        await clientRef.current.leave()
+        try {
+          await clientRef.current.leave()
+          await clientRef.current.release()
+        } catch (e) {
+          // Client may already be released
+        }
         clientRef.current = null
       }
       if (audioRef.current) {
@@ -160,14 +172,22 @@ const Microphone = () => {
         }
       })
 
-      client.on('user-unpublished', (user, mediaType) => {
+      client.on('user-unpublished', async (user, mediaType) => {
         console.log('[Agora] User unpublished:', user.uid, mediaType)
-        if (mediaType === 'audio') {
-          if (audioRef.current) {
-            audioRef.current.srcObject = null
+        try {
+          if (mediaType === 'audio') {
+            const remoteAudioTrack = user.audioTrack
+            if (remoteAudioTrack) {
+              remoteAudioTrack.stop()
+            }
+            if (audioRef.current) {
+              audioRef.current.srcObject = null
+            }
+            setConnectionState('disconnected')
+            setIsPlaying(false)
           }
-          setConnectionState('disconnected')
-          setIsPlaying(false)
+        } catch (error) {
+          console.error('[Agora] Error handling user-unpublished:', error)
         }
       })
 

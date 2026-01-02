@@ -66,12 +66,20 @@ const Screen = () => {
   const cleanupAgora = async () => {
     try {
       if (remoteTrackRef.current) {
-        remoteTrackRef.current.stop()
-        remoteTrackRef.current.close()
+        try {
+          remoteTrackRef.current.stop()
+        } catch (e) {
+          // Track may already be stopped
+        }
         remoteTrackRef.current = null
       }
       if (clientRef.current) {
-        await clientRef.current.leave()
+        try {
+          await clientRef.current.leave()
+          await clientRef.current.release()
+        } catch (e) {
+          // Client may already be released
+        }
         clientRef.current = null
       }
       if (videoRef.current) {
@@ -128,24 +136,38 @@ const Screen = () => {
       // Set up event handlers
       client.on('user-published', async (user, mediaType) => {
         console.log('[Agora] User published:', user.uid, mediaType)
-        if (mediaType === 'video') {
-          await client.subscribe(user, mediaType)
-          const remoteVideoTrack = user.videoTrack
-          if (remoteVideoTrack && videoRef.current) {
-            remoteTrackRef.current = remoteVideoTrack
-            videoRef.current.srcObject = remoteVideoTrack.getMediaStream()
-            videoRef.current.play().catch(console.error)
-            setConnectionState('connected')
-            console.log('[Agora] ✅ Screen track subscribed and playing')
+        try {
+          if (mediaType === 'video') {
+            await client.subscribe(user, mediaType)
+            const remoteVideoTrack = user.videoTrack
+            if (remoteVideoTrack && videoRef.current) {
+              remoteTrackRef.current = remoteVideoTrack
+              remoteVideoTrack.play(videoRef.current)
+              setConnectionState('connected')
+              console.log('[Agora] ✅ Screen track subscribed and playing')
+            }
           }
+        } catch (error) {
+          console.error('[Agora] Error handling user-published:', error)
+          setConnectionState('error')
         }
       })
 
-      client.on('user-unpublished', (user, mediaType) => {
+      client.on('user-unpublished', async (user, mediaType) => {
         console.log('[Agora] User unpublished:', user.uid, mediaType)
-        if (mediaType === 'video' && videoRef.current) {
-          videoRef.current.srcObject = null
-          setConnectionState('disconnected')
+        try {
+          if (mediaType === 'video') {
+            const remoteVideoTrack = user.videoTrack
+            if (remoteVideoTrack) {
+              remoteVideoTrack.stop()
+            }
+            if (videoRef.current) {
+              videoRef.current.srcObject = null
+            }
+            setConnectionState('disconnected')
+          }
+        } catch (error) {
+          console.error('[Agora] Error handling user-unpublished:', error)
         }
       })
 
