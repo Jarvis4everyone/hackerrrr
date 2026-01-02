@@ -1,30 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { MonitorSpeaker, Play, Square, Monitor } from 'lucide-react'
 import { getPCs, startScreenStream, stopStream, getStreamStatus } from '../services/api'
-
-// Get API URL from environment or construct from current location
-let API_BASE_URL = import.meta.env.VITE_API_URL
-if (!API_BASE_URL && import.meta.env.PROD) {
-  const hostname = window.location.hostname
-  if (hostname.includes('onrender.com')) {
-    const parts = hostname.split('.')
-    if (parts[0] === 'hackerrrr-frontend') {
-      API_BASE_URL = `https://hackerrrr-backend.${parts.slice(1).join('.')}`
-    } else {
-      API_BASE_URL = ''
-    }
-  } else {
-    API_BASE_URL = ''
-  }
-} else if (!API_BASE_URL) {
-  API_BASE_URL = 'http://localhost:8000'
-}
-
-API_BASE_URL = API_BASE_URL.replace(/\/$/, '')
-
-const WS_BASE_URL = API_BASE_URL 
-  ? API_BASE_URL.replace('http://', 'ws://').replace('https://', 'wss://')
-  : (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.host
+import { getIceServers, getWebSocketUrl } from '../utils/webrtc'
 
 const Screen = () => {
   const [pcs, setPCs] = useState([])
@@ -145,7 +122,7 @@ const Screen = () => {
       setConnectionState('connecting')
       cleanupWebRTC()
       
-      const wsUrl = `${WS_BASE_URL}/ws/frontend/${pcId}/screen`
+      const wsUrl = getWebSocketUrl(`/ws/frontend/${pcId}/screen`)
       console.log('[WebRTC] Connecting to:', wsUrl)
       const ws = new WebSocket(wsUrl)
       wsRef.current = ws
@@ -173,11 +150,7 @@ const Screen = () => {
         }
       }
 
-      const pc = new RTCPeerConnection({
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' }
-        ]
-      })
+      const pc = new RTCPeerConnection(getIceServers())
       peerConnectionRef.current = pc
       
       let trackCheckInterval = null

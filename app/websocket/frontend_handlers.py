@@ -88,9 +88,23 @@ async def handle_frontend_websocket(websocket: WebSocket, pc_id: str, stream_typ
         try:
             from aiortc import RTCPeerConnection, RTCSessionDescription, RTCConfiguration, RTCIceServer, RTCIceCandidate
             
-            configuration = RTCConfiguration(
-                iceServers=[RTCIceServer(urls=["stun:stun.l.google.com:19302"])]
-            )
+            # Build ICE servers list
+            from app.config import settings
+            ice_servers = [
+                RTCIceServer(urls=["stun:stun.l.google.com:19302"]),
+                RTCIceServer(urls=["stun:stun1.l.google.com:19302"]),
+            ]
+            
+            # Add TURN server if configured
+            if settings.TURN_SERVER_URL:
+                turn_config = {"urls": [settings.TURN_SERVER_URL]}
+                if settings.TURN_SERVER_USERNAME and settings.TURN_SERVER_PASSWORD:
+                    turn_config["username"] = settings.TURN_SERVER_USERNAME
+                    turn_config["credential"] = settings.TURN_SERVER_PASSWORD
+                ice_servers.append(RTCIceServer(**turn_config))
+                logger.info(f"[Frontend WebRTC] Using TURN server: {settings.TURN_SERVER_URL}")
+            
+            configuration = RTCConfiguration(iceServers=ice_servers)
             frontend_pc = RTCPeerConnection(configuration=configuration)
             
             # Add tracks to frontend connection using relay

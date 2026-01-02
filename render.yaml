@@ -26,6 +26,17 @@ services:
         sync: false
         # Set this in Render dashboard to your desired password
         # Example: your_secure_password
+      - key: TURN_SERVER_URL
+        sync: false
+        # Optional: TURN server URL for WebRTC (helps with NAT traversal in production)
+        # Example: turn:your-turn-server.com:3478?transport=udp
+        # Free TURN servers: https://gist.github.com/mondain/b0ec1b5d90f7dffb8f8b
+      - key: TURN_SERVER_USERNAME
+        sync: false
+        # Optional: TURN server username (if required)
+      - key: TURN_SERVER_PASSWORD
+        sync: false
+        # Optional: TURN server password (if required)
     healthCheckPath: /api/health
 
   - type: web
@@ -39,4 +50,14 @@ services:
         sync: false
         # Set this in Render dashboard to your backend service URL
         # Example: https://hackerrrr-backend.onrender.com
+      - key: VITE_TURN_SERVER_URL
+        sync: false
+        # Optional: TURN server URL for frontend WebRTC (must match backend TURN_SERVER_URL)
+        # Example: turn:your-turn-server.com:3478?transport=udp
+      - key: VITE_TURN_SERVER_USERNAME
+        sync: false
+        # Optional: TURN server username (if required)
+      - key: VITE_TURN_SERVER_PASSWORD
+        sync: false
+        # Optional: TURN server password (if required)
 

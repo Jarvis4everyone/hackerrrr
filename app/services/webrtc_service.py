@@ -56,10 +56,24 @@ class WebRTCService:
         # Stop any existing stream first
         await self.stop_stream(pc_id)
         
-        # Create peer connection with STUN servers
-        configuration = RTCConfiguration(
-            iceServers=[RTCIceServer(urls=["stun:stun.l.google.com:19302"])]
-        )
+        # Build ICE servers list
+        ice_servers = [
+            RTCIceServer(urls=["stun:stun.l.google.com:19302"]),
+            RTCIceServer(urls=["stun:stun1.l.google.com:19302"]),
+        ]
+        
+        # Add TURN server if configured
+        from app.config import settings
+        if settings.TURN_SERVER_URL:
+            turn_config = {"urls": [settings.TURN_SERVER_URL]}
+            if settings.TURN_SERVER_USERNAME and settings.TURN_SERVER_PASSWORD:
+                turn_config["username"] = settings.TURN_SERVER_USERNAME
+                turn_config["credential"] = settings.TURN_SERVER_PASSWORD
+            ice_servers.append(RTCIceServer(**turn_config))
+            logger.info(f"[WebRTC] Using TURN server: {settings.TURN_SERVER_URL}")
+        
+        # Create peer connection with ICE servers
+        configuration = RTCConfiguration(iceServers=ice_servers)
         
         pc = RTCPeerConnection(configuration=configuration)
         self.peer_connections[pc_id] = pc

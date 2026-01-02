@@ -1,31 +1,8 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { Mic, Play, Square, Monitor, Volume2, Download } from 'lucide-react'
 import { getPCs, startMicrophoneStream, stopStream, getStreamStatus } from '../services/api'
+import { getIceServers, getWebSocketUrl } from '../utils/webrtc'
 import lamejs from 'lamejs'
-
-// Get API URL from environment or construct from current location
-let API_BASE_URL = import.meta.env.VITE_API_URL
-if (!API_BASE_URL && import.meta.env.PROD) {
-  const hostname = window.location.hostname
-  if (hostname.includes('onrender.com')) {
-    const parts = hostname.split('.')
-    if (parts[0] === 'hackerrrr-frontend') {
-      API_BASE_URL = `https://hackerrrr-backend.${parts.slice(1).join('.')}`
-    } else {
-      API_BASE_URL = ''
-    }
-  } else {
-    API_BASE_URL = ''
-  }
-} else if (!API_BASE_URL) {
-  API_BASE_URL = 'http://localhost:8000'
-}
-
-API_BASE_URL = API_BASE_URL.replace(/\/$/, '')
-
-const WS_BASE_URL = API_BASE_URL 
-  ? API_BASE_URL.replace('http://', 'ws://').replace('https://', 'wss://')
-  : (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.host
 
 const Microphone = () => {
   const [pcs, setPCs] = useState([])
@@ -160,7 +137,8 @@ const Microphone = () => {
     try {
       cleanupWebRTC()
 
-      const ws = new WebSocket(`${WS_BASE_URL}/ws/frontend/${pcId}/microphone`)
+      const wsUrl = getWebSocketUrl(`/ws/frontend/${pcId}/microphone`)
+      const ws = new WebSocket(wsUrl)
       wsRef.current = ws
 
       ws.onopen = () => {
@@ -188,11 +166,7 @@ const Microphone = () => {
         setConnectionState('disconnected')
       }
 
-      const pc = new RTCPeerConnection({
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' }
-        ]
-      })
+      const pc = new RTCPeerConnection(getIceServers())
       peerConnectionRef.current = pc
 
       // Handle incoming audio tracks
