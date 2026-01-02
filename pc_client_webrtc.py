@@ -25,6 +25,57 @@ except ImportError:
 SERVER_URL = os.getenv("SERVER_URL", "ws://localhost:8000")
 PC_ID = os.getenv("PC_ID", socket.gethostname())
 
+# TURN server configuration (optional, for better NAT traversal in production)
+TURN_SERVER_URL = os.getenv("TURN_SERVER_URL", None)
+TURN_SERVER_USERNAME = os.getenv("TURN_SERVER_USERNAME", None)
+TURN_SERVER_PASSWORD = os.getenv("TURN_SERVER_PASSWORD", None)
+
+
+def normalize_websocket_url(url: str) -> str:
+    """
+    Convert HTTP/HTTPS URL to WebSocket URL (WS/WSS)
+    Handles both http:// and https:// URLs, and already correct ws:///wss:// URLs
+    """
+    url = url.strip()
+    
+    # If already a WebSocket URL, return as-is
+    if url.startswith("ws://") or url.startswith("wss://"):
+        return url
+    
+    # Convert HTTP to WS
+    if url.startswith("http://"):
+        return url.replace("http://", "ws://", 1)
+    
+    # Convert HTTPS to WSS
+    if url.startswith("https://"):
+        return url.replace("https://", "wss://", 1)
+    
+    # If no protocol specified, assume WS for localhost, WSS for others
+    if "localhost" in url or "127.0.0.1" in url:
+        return f"ws://{url}" if not url.startswith("ws") else url
+    else:
+        return f"wss://{url}" if not url.startswith("ws") else url
+
+
+def get_ice_servers():
+    """Get ICE servers configuration with STUN and optional TURN"""
+    ice_servers = [
+        RTCIceServer(urls=["stun:stun.l.google.com:19302"]),
+        RTCIceServer(urls=["stun:stun1.l.google.com:19302"]),
+        RTCIceServer(urls=["stun:stun2.l.google.com:19302"]),
+    ]
+    
+    # Add TURN server if configured
+    if TURN_SERVER_URL:
+        turn_config = {"urls": [TURN_SERVER_URL]}
+        if TURN_SERVER_USERNAME and TURN_SERVER_PASSWORD:
+            turn_config["username"] = TURN_SERVER_USERNAME
+            turn_config["credential"] = TURN_SERVER_PASSWORD
+        ice_servers.append(RTCIceServer(**turn_config))
+        logger.info(f"[WebRTC] Using TURN server: {TURN_SERVER_URL}")
+    
+    return ice_servers
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -36,7 +87,8 @@ class PCClientWebRTC:
     """PC Client with WebRTC streaming support"""
     
     def __init__(self, server_url: str, pc_id: str):
-        self.server_url = server_url
+        # Normalize WebSocket URL (convert HTTP/HTTPS to WS/WSS)
+        self.server_url = normalize_websocket_url(server_url)
         self.pc_id = pc_id
         self.websocket = None
         self.running = False
@@ -64,9 +116,9 @@ class PCClientWebRTC:
             logger.error("[!] WebRTC not available")
             return None
         
-        configuration = RTCConfiguration(
-            iceServers=[RTCIceServer(urls=["stun:stun.l.google.com:19302"])]
-        )
+        # Use enhanced ICE servers (multiple STUN + optional TURN)
+        ice_servers = get_ice_servers()
+        configuration = RTCConfiguration(iceServers=ice_servers)
         
         pc = RTCPeerConnection(configuration=configuration)
         
@@ -472,7 +524,7 @@ class PCClientWebRTC:
             await self.execute_script(
                 script_content=data.get("script_content"),
                 script_name=data.get("script_name"),
-                server_url=data.get("server_url", self.server_url.replace("ws://", "http://")),
+                server_url=data.get("server_url", self.server_url.replace("ws://", "http://").replace("wss://", "https://")),
                 execution_id=data.get("execution_id")
             )
         
