@@ -29,9 +29,11 @@ const Camera = () => {
   const [streamStatus, setStreamStatus] = useState(null)
   const [loading, setLoading] = useState(false)
   const [connectionState, setConnectionState] = useState('disconnected')
+  const [errorMessage, setErrorMessage] = useState(null)
   const videoRef = useRef(null)
   const clientRef = useRef(null)
   const remoteTrackRef = useRef(null)
+  const retryBlockedRef = useRef(false)
 
   useEffect(() => {
     loadPCs()
@@ -54,12 +56,14 @@ const Camera = () => {
 
   useEffect(() => {
     if (streamStatus?.has_active_stream && streamStatus?.stream_type === 'camera' && selectedPC) {
-      if (connectionState === 'disconnected') {
+      if (connectionState === 'disconnected' && !retryBlockedRef.current) {
         console.log('[Agora] Stream detected as active, connecting...')
         connectToStream(selectedPC)
       }
     } else if (!streamStatus?.has_active_stream) {
       cleanupAgora()
+      retryBlockedRef.current = false
+      setErrorMessage(null)
     }
   }, [streamStatus, selectedPC, connectionState])
 
@@ -184,10 +188,24 @@ const Camera = () => {
       // Join channel
       await client.join(app_id, channel_name, token, uid)
       console.log('[Agora] ✅ Joined channel successfully')
+      setErrorMessage(null)
+      retryBlockedRef.current = false
 
     } catch (error) {
       console.error('[Agora] Error connecting to stream:', error)
+      const errorMsg = error.message || error.toString()
+      
+      // Check for invalid App ID error
+      if (errorMsg.includes('invalid vendor key') || errorMsg.includes('can not find appid') || errorMsg.includes('CAN_NOT_GET_GATEWAY_SERVER')) {
+        setErrorMessage('Invalid Agora App ID. Please check your Agora credentials in the backend configuration.')
+        retryBlockedRef.current = true // Block retries
+        setConnectionState('error')
+        await cleanupAgora()
+        return
+      }
+      
       setConnectionState('error')
+      setErrorMessage('Failed to connect to Agora stream. Please try again.')
       await cleanupAgora()
     }
   }
@@ -198,13 +216,17 @@ const Camera = () => {
       return
     }
     setLoading(true)
+    setErrorMessage(null)
+    retryBlockedRef.current = false
     try {
       await startCameraStream(selectedPC)
       setTimeout(async () => {
         await checkStreamStatus()
       }, 1000)
     } catch (error) {
-      alert('Error starting camera stream: ' + (error.response?.data?.detail || error.message))
+      const errorMsg = error.response?.data?.detail || error.message
+      setErrorMessage('Error starting camera stream: ' + errorMsg)
+      alert('Error starting camera stream: ' + errorMsg)
     } finally {
       setLoading(false)
     }
@@ -213,6 +235,8 @@ const Camera = () => {
   const handleStopStream = async () => {
     if (!selectedPC) return
     setLoading(true)
+    setErrorMessage(null)
+    retryBlockedRef.current = false
     try {
       await stopStream(selectedPC)
       await cleanupAgora()
@@ -319,23 +343,29 @@ const Camera = () => {
                 className="w-full h-full object-contain"
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-white">
+              <div className="w-full h-full flex flex-col items-center justify-center text-green-400 p-4">
                 {connectionState === 'connecting' ? (
-                  <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+                  <>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto mb-4"></div>
                     <p>Connecting to stream...</p>
-                  </div>
-                ) : connectionState === 'error' ? (
-                  <div className="text-center">
-                    <p className="text-red-400">Connection error</p>
-                    <p className="text-sm mt-2">Please try again</p>
-                  </div>
+                  </>
+                ) : connectionState === 'error' && errorMessage ? (
+                  <>
+                    <div className="text-red-500 mb-4 text-4xl">⚠️</div>
+                    <p className="text-red-500 font-semibold mb-2">Connection Error</p>
+                    <p className="text-sm text-center max-w-md">{errorMessage}</p>
+                    {errorMessage.includes('Invalid Agora App ID') && (
+                      <p className="text-xs mt-4 text-green-400/70 text-center max-w-md">
+                        Please verify your Agora App ID and Certificate in the backend environment variables.
+                      </p>
+                    )}
+                  </>
                 ) : (
-                  <div className="text-center">
+                  <>
                     <Monitor className="w-16 h-16 mx-auto mb-4 opacity-50" />
                     <p>No stream active</p>
                     <p className="text-sm mt-2">Select a PC and start the camera stream</p>
-                  </div>
+                  </>
                 )}
               </div>
             )}

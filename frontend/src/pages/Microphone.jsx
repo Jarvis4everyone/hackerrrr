@@ -62,12 +62,14 @@ const Microphone = () => {
 
   useEffect(() => {
     if (streamStatus?.has_active_stream && streamStatus?.stream_type === 'microphone' && selectedPC) {
-      if (connectionState === 'disconnected') {
+      if (connectionState === 'disconnected' && !retryBlockedRef.current) {
         console.log('[Agora] Stream detected as active, connecting...')
         connectToStream(selectedPC)
       }
     } else if (!streamStatus?.has_active_stream) {
       cleanupAgora()
+      retryBlockedRef.current = false
+      setErrorMessage(null)
     }
   }, [streamStatus, selectedPC, connectionState])
 
@@ -203,10 +205,24 @@ const Microphone = () => {
       // Join channel
       await client.join(app_id, channel_name, token, uid)
       console.log('[Agora] ✅ Joined channel successfully')
+      setErrorMessage(null)
+      retryBlockedRef.current = false
 
     } catch (error) {
       console.error('[Agora] Error connecting to stream:', error)
+      const errorMsg = error.message || error.toString()
+      
+      // Check for invalid App ID error
+      if (errorMsg.includes('invalid vendor key') || errorMsg.includes('can not find appid') || errorMsg.includes('CAN_NOT_GET_GATEWAY_SERVER')) {
+        setErrorMessage('Invalid Agora App ID. Please check your Agora credentials in the backend configuration.')
+        retryBlockedRef.current = true // Block retries
+        setConnectionState('error')
+        await cleanupAgora()
+        return
+      }
+      
       setConnectionState('error')
+      setErrorMessage('Failed to connect to Agora stream. Please try again.')
       await cleanupAgora()
     }
   }
@@ -271,13 +287,17 @@ const Microphone = () => {
       return
     }
     setLoading(true)
+    setErrorMessage(null)
+    retryBlockedRef.current = false
     try {
       await startMicrophoneStream(selectedPC)
       setTimeout(async () => {
         await checkStreamStatus()
       }, 1000)
     } catch (error) {
-      alert('Error starting microphone stream: ' + (error.response?.data?.detail || error.message))
+      const errorMsg = error.response?.data?.detail || error.message
+      setErrorMessage('Error starting microphone stream: ' + errorMsg)
+      alert('Error starting microphone stream: ' + errorMsg)
     } finally {
       setLoading(false)
     }
@@ -286,6 +306,8 @@ const Microphone = () => {
   const handleStopStream = async () => {
     if (!selectedPC) return
     setLoading(true)
+    setErrorMessage(null)
+    retryBlockedRef.current = false
     try {
       await stopStream(selectedPC)
       await cleanupAgora()
@@ -423,6 +445,17 @@ const Microphone = () => {
                   <>
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto mb-4"></div>
                     <p className="text-green-400">Connecting to stream...</p>
+                  </>
+                ) : connectionState === 'error' && errorMessage ? (
+                  <>
+                    <div className="text-red-500 mb-4 text-4xl">⚠️</div>
+                    <p className="text-red-500 font-semibold mb-2">Connection Error</p>
+                    <p className="text-sm text-center max-w-md text-green-400">{errorMessage}</p>
+                    {errorMessage.includes('Invalid Agora App ID') && (
+                      <p className="text-xs mt-4 text-green-400/70 text-center max-w-md">
+                        Please verify your Agora App ID and Certificate in the backend environment variables.
+                      </p>
+                    )}
                   </>
                 ) : (
                   <>
