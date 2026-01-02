@@ -8,7 +8,7 @@ Complete guide for developing PC clients that connect to the Remote Script Serve
 2. [Connection Setup](#connection-setup)
 3. [WebSocket Communication](#websocket-communication)
 4. [Message Types](#message-types)
-5. [WebRTC Streaming](#webrtc-streaming)
+5. [Agora Streaming](#agora-streaming)
 6. [REST API Endpoints](#rest-api-endpoints)
 7. [Complete Client Example](#complete-client-example)
 8. [Error Handling](#error-handling)
@@ -25,7 +25,7 @@ The Remote Script Server uses **WebSocket** for real-time bidirectional communic
 - **Multiple PC Support**: Server handles unlimited concurrent connections
 - **Script Execution Tracking**: All executions are logged in MongoDB
 - **Status Reporting**: PCs can send execution status and results back to server
-- **WebRTC Streaming**: Built-in support for camera, microphone, and screen streaming
+- **Agora Streaming**: Built-in support for camera, microphone, and screen streaming using Agora RTC
   - Camera streaming for video feed
   - Microphone streaming with 5-second audio chunks
   - Screen sharing for remote desktop viewing
@@ -713,9 +713,9 @@ Notify server that stream is ready.
 
 ---
 
-## WebRTC Streaming
+## Agora Streaming
 
-The server supports **WebRTC** for real-time streaming of camera, microphone, and screen. These are built-in features available for every connected PC.
+The server supports **Agora RTC** for real-time streaming of camera, microphone, and screen. These are built-in features available for every connected PC.
 
 ### Overview
 
@@ -724,6 +724,7 @@ The server supports **WebRTC** for real-time streaming of camera, microphone, an
 - **Screen Sharing**: View PC's screen in real-time
 - **Single Stream**: Only one stream can be active at a time per PC
 - **On-Demand**: Streams are started/stopped via API calls
+- **Cloud-Based**: Agora handles all NAT traversal and media routing automatically
 
 ### Stream Types
 
@@ -731,62 +732,78 @@ The server supports **WebRTC** for real-time streaming of camera, microphone, an
 2. **Microphone** (`microphone`): Audio feed from PC's microphone (5-second chunks)
 3. **Screen** (`screen`): Screen share from PC's display
 
-### WebRTC Connection Flow
+### Agora Connection Flow
 
-1. **Server initiates stream** via API endpoint
-2. **Server sends `start_stream` message** to PC via WebSocket
-3. **PC creates WebRTC offer** with TURN/STUN servers and sends it to server
-4. **Server creates answer** and sends it back to PC
-5. **PC and server exchange ICE candidates**
-6. **Connection established**, media starts flowing
-
-### TURN Server Support (NAT Traversal)
-
-For cloud deployments or when PCs are behind NAT/firewalls, **TURN servers are essential** for WebRTC to work properly. The system includes built-in support for Metered.ca's free TURN servers.
-
-**Automatic TURN Configuration:**
-- PC client (`pc_client_webrtc.py`) automatically fetches TURN credentials from Metered.ca
-- Frontend automatically fetches TURN credentials from Metered.ca
-- Backend automatically fetches TURN credentials from Metered.ca
-- Credentials are cached for 1 hour to reduce API calls
-- Falls back to STUN-only if TURN fetch fails
-
-**How It Works:**
-1. On first WebRTC connection, the client fetches TURN server credentials from:
+1. **Server initiates stream** via API endpoint (`/api/streaming/{pc_id}/{stream_type}/start`)
+2. **Server generates Agora token** with publisher role for PC
+3. **Server sends `start_stream` message** to PC via WebSocket with Agora configuration:
+   ```json
+   {
+       "type": "start_stream",
+       "stream_type": "camera",
+       "agora": {
+           "channel_name": "PC-001_camera",
+           "token": "agora_token_here",
+           "uid": 0,
+           "app_id": "7b3640aaf0394f8d809829db4abbe902"
+       }
+   }
    ```
-   https://x1.metered.live/api/v1/turn/credentials?apiKey={API_KEY}
-   ```
-2. Returns a list of ICE servers (STUN + TURN) with credentials
-3. These are used to configure `RTCPeerConnection`
-4. TURN servers relay traffic when direct peer-to-peer connection fails
+4. **PC joins Agora channel** using provided credentials
+5. **PC publishes media** (camera/microphone/screen) to channel
+6. **Frontend subscribes** to channel using subscriber token from `/api/streaming/{pc_id}/token`
+7. **Media flows** through Agora's infrastructure
 
-**Environment Variables (Optional):**
+### Agora Configuration
+
+The server uses the following Agora credentials (configured in environment variables):
+
+- **APP ID**: `7b3640aaf0394f8d809829db4abbe902`
+- **APP Certificate**: `15b63fe200b44aa5a2428ace9d857ba4`
+- **Temp Token**: `007eJxTYIgsCZObte2wn++EMNMq9icLi4NZnXrkkzFykwmCcZm5kYJCamGRhbmqRZpFgYWFoYWaYkmSQmJaVaGhhtzw3PbAhkZLh3I5qVkQECQXwmhgpDBgYA3Xga0Q==`
+
+**Environment Variables:**
 ```bash
-# Custom Metered.ca API key (default: uses free tier)
-export METERED_API_KEY=your_api_key_here
+# Agora App ID
+export AGORA_APP_ID=7b3640aaf0394f8d809829db4abbe902
 
-# Custom API endpoint (default: https://x1.metered.live/api/v1/turn/credentials)
-export METERED_API_URL=https://x1.metered.live/api/v1/turn/credentials
+# Agora App Certificate (for token generation)
+export AGORA_APP_CERTIFICATE=15b63fe200b44aa5a2428ace9d857ba4
+
+# Optional: Temporary token (fallback)
+export AGORA_TEMP_TOKEN=007eJxTYIgsCZObte2wn++EMNMq9icLi4NZnXrkkzFykwmCcZm5kYJCamGRhbmqRZpFgYWFoYWaYkmSQmJaVaGhhtzw3PbAhkZLh3I5qVkQECQXwmhgpDBgYA3Xga0Q==
 ```
-
-**Note:** The default configuration uses Metered.ca's free tier, which is sufficient for most use cases. For production deployments with high traffic, consider using a paid TURN service.
 
 ### Messages FROM Server TO PC
 
 #### Start Stream
-Server requests PC to start a stream.
+Server requests PC to start a stream with Agora configuration.
 
 ```json
 {
     "type": "start_stream",
-    "stream_type": "camera" | "microphone" | "screen"
+    "stream_type": "camera" | "microphone" | "screen",
+    "agora": {
+        "channel_name": "{pc_id}_{stream_type}",
+        "token": "agora_rtc_token",
+        "uid": 0,
+        "app_id": "7b3640aaf0394f8d809829db4abbe902"
+    }
 }
 ```
 
 **PC Response:**
-- Create WebRTC peer connection
-- Get media track (camera/microphone/screen)
-- Create offer and send `webrtc_offer` message
+1. Initialize Agora RTC Engine with `app_id`
+2. Enable appropriate media (video for camera/screen, audio for microphone)
+3. Join channel using `channel_name`, `token`, and `uid`
+4. Start publishing media track
+5. Send confirmation message:
+   ```json
+   {
+       "type": "stream_started",
+       "stream_type": "camera" | "microphone" | "screen"
+   }
+   ```
 
 #### Stop Stream
 Server requests PC to stop current stream.
@@ -798,163 +815,115 @@ Server requests PC to stop current stream.
 ```
 
 **PC Response:**
-- Stop media tracks
-- Close peer connection
-- Clean up resources
-
-#### WebRTC Answer
-Server sends WebRTC answer to PC.
-
-```json
-{
-    "type": "webrtc_answer",
-    "sdp": "v=0\r\no=- 1234567890 1234567890 IN IP4 0.0.0.0\r\n..."
-}
-```
-
-**PC Action:**
-- Set remote description with answer
-- Continue ICE candidate exchange
-
-#### WebRTC ICE Candidate
-Server sends ICE candidate to PC.
-
-```json
-{
-    "type": "webrtc_ice_candidate",
-    "candidate": {
-        "candidate": "candidate:1 1 UDP 2130706431 192.168.1.100 54321 typ host",
-        "sdpMLineIndex": 0,
-        "sdpMid": "0"
-    }
-}
-```
-
-**PC Action:**
-- Add ICE candidate to peer connection
+1. Stop publishing media
+2. Leave Agora channel
+3. Release Agora engine
+4. Clean up resources
+5. Send confirmation:
+   ```json
+   {
+       "type": "stream_stopped"
+   }
+   ```
 
 ### Messages FROM PC TO Server
 
-#### WebRTC Offer
-PC sends WebRTC offer to server.
+#### Stream Started
+PC notifies server that stream has started successfully.
 
 ```json
 {
-    "type": "webrtc_offer",
-    "sdp": "v=0\r\no=- 1234567890 1234567890 IN IP4 0.0.0.0\r\n..."
-}
-```
-
-**Server Response:**
-- Create answer and send `webrtc_answer` message
-
-#### WebRTC ICE Candidate
-PC sends ICE candidate to server.
-
-```json
-{
-    "type": "webrtc_ice_candidate",
-    "candidate": {
-        "candidate": "candidate:1 1 UDP 2130706431 192.168.1.100 54321 typ host",
-        "sdpMLineIndex": 0,
-        "sdpMid": "0"
-    }
-}
-```
-
-#### WebRTC Stream Ready
-PC notifies server that stream is ready.
-
-```json
-{
-    "type": "webrtc_stream_ready",
+    "type": "stream_started",
     "stream_type": "camera" | "microphone" | "screen"
+}
+```
+
+#### Stream Stopped
+PC notifies server that stream has stopped.
+
+```json
+{
+    "type": "stream_stopped"
+}
+```
+
+#### Stream Error
+PC notifies server of any errors during streaming.
+
+```json
+{
+    "type": "stream_error",
+    "stream_type": "camera" | "microphone" | "screen",
+    "error": "Error message"
 }
 ```
 
 ### Implementation Example
 
-**Using `pc_client_webrtc.py` (Recommended):**
+**Using `pc_client_agora.py` (Recommended):**
 
-The provided `pc_client_webrtc.py` includes full TURN server support. Simply use it:
+The provided `pc_client_agora.py` includes full Agora SDK integration. Simply use it:
 
 ```python
-from pc_client_webrtc import PCClientWebRTC
+from pc_client_agora import PCClientAgora
 
-client = PCClientWebRTC(
+client = PCClientAgora(
     server_url="wss://your-server.com",
     pc_id="PC-001"
 )
 
-await client.connect()
-await client.listen()  # Handles all WebRTC automatically
+await client.run()  # Handles all Agora streaming automatically
 ```
 
 **Manual Implementation (if building custom client):**
 
 ```python
-import aiohttp
-from aiortc import RTCPeerConnection, RTCConfiguration, RTCIceServer
-
-# Fetch TURN server credentials
-async def get_ice_servers():
-    try:
-        api_url = "https://x1.metered.live/api/v1/turn/credentials?apiKey=4b7268b361c4e1a08789e6415026801bfb20"
-        async with aiohttp.ClientSession() as session:
-            async with session.get(api_url) as response:
-                if response.status == 200:
-                    ice_servers_data = await response.json()
-                    # Convert to RTCIceServer objects
-                    ice_servers = []
-                    for server in ice_servers_data:
-                        urls = server.get('urls')
-                        if isinstance(urls, str):
-                            urls = [urls]
-                        ice_servers.append(RTCIceServer(
-                            urls=urls,
-                            username=server.get('username'),
-                            credential=server.get('credential')
-                        ))
-                    return ice_servers
-    except Exception as e:
-        print(f"Failed to fetch TURN credentials: {e}")
-    
-    # Fallback to STUN only
-    return [
-        RTCIceServer(urls=["stun:stun.l.google.com:19302"]),
-        RTCIceServer(urls=["stun:stun1.l.google.com:19302"]),
-    ]
+from agora_rtc_sdk import AgoraRtcEngine, RtcEngineConfig
 
 # When receiving start_stream message
 if message_type == "start_stream":
     stream_type = data.get("stream_type")
+    agora_config = data.get("agora")
     
-    # Get ICE servers with TURN support
-    ice_servers = await get_ice_servers()
+    if not agora_config:
+        await send_error("No Agora configuration provided")
+        return
     
-    # Create peer connection with TURN servers
-    configuration = RTCConfiguration(iceServers=ice_servers)
-    pc = RTCPeerConnection(configuration=configuration)
+    channel_name = agora_config.get("channel_name")
+    token = agora_config.get("token")
+    uid = agora_config.get("uid", 0)
+    app_id = agora_config.get("app_id")
     
-    # Get media track based on stream type
-    if stream_type == "camera":
-        player = MediaPlayer("video=Integrated Camera", format="dshow")
-        pc.addTrack(player.video)
-    elif stream_type == "microphone":
-        player = MediaPlayer("audio=Microphone", format="dshow")
-        pc.addTrack(player.audio)
-    elif stream_type == "screen":
-        # Screen capture implementation
-        pc.addTrack(screen_track)
+    # Initialize Agora engine
+    config = RtcEngineConfig()
+    config.app_id = app_id
+    engine = AgoraRtcEngine.create_rtc_engine(config)
+    engine.initialize(config)
     
-    # Create offer
-    offer = await pc.createOffer()
-    await pc.setLocalDescription(offer)
+    # Enable appropriate media
+    if stream_type in ["camera", "screen"]:
+        engine.enable_video()
+        engine.enable_local_video(True)
+        
+        # Set video encoder configuration
+        engine.set_video_encoder_configuration({
+            'width': 1280,
+            'height': 720,
+            'frameRate': 30,
+            'bitrate': 2000
+        })
     
-    # Send offer to server
+    if stream_type in ["microphone"]:
+        engine.enable_audio()
+        engine.enable_local_audio(True)
+    
+    # Join channel
+    engine.join_channel(token, channel_name, uid)
+    
+    # Send confirmation
     await websocket.send(json.dumps({
-        "type": "webrtc_offer",
-        "sdp": pc.localDescription.sdp
+        "type": "stream_started",
+        "stream_type": stream_type
     }))
 ```
 
@@ -962,40 +931,49 @@ if message_type == "start_stream":
 
 #### Windows
 ```python
-# Camera
-MediaPlayer("video=Integrated Camera", format="dshow")
+# Camera: Use camera index (0, 1, 2, etc.)
+# Agora SDK automatically detects available cameras
 
-# Microphone
-MediaPlayer("audio=Microphone", format="dshow")
+# Microphone: Use default audio device
+# Agora SDK automatically uses default microphone
 ```
 
 #### Linux
 ```python
-# Camera
-MediaPlayer("/dev/video0", format="v4l2")
+# Camera: Use /dev/video0, /dev/video1, etc.
+# Configure in Agora SDK camera selection
 
-# Microphone
-MediaPlayer("default", format="pulse")
+# Microphone: Use default PulseAudio device
+# Agora SDK automatically uses default microphone
 ```
 
 #### macOS
 ```python
-# Camera/Microphone
-MediaPlayer("default", format="avfoundation")
+# Camera/Microphone: Use default devices
+# Agora SDK automatically uses default camera/microphone
 ```
+
+### Agora SDK Installation
+
+**Python:**
+```bash
+pip install agora-python-sdk
+```
+
+**Note:** The Agora Python SDK may require additional native dependencies. Refer to [Agora Python SDK Documentation](https://docs.agora.io/en/video-calling/get-started/get-started-sdk) for platform-specific installation instructions.
 
 ### Important Notes
 
 1. **Single Stream**: Starting a new stream automatically stops any existing stream
 2. **On-Demand**: Streams are not always active - they start when requested
 3. **Audio Chunks**: Microphone streams send continuous audio that is automatically recorded into 5-second chunks on the frontend. Each chunk can be played or downloaded individually.
-4. **Permissions**: Ensure camera/microphone permissions are granted
-5. **Platform Support**: Media access is platform-specific - adjust code accordingly
-6. **TURN Servers Required for Cloud**: When server is deployed on cloud (e.g., Render, AWS) and PC is behind NAT, TURN servers are **essential**. The provided `pc_client_webrtc.py` includes automatic TURN server support.
-7. **ICE Connection**: If ICE connection fails, check:
-   - TURN servers are configured (automatic in `pc_client_webrtc.py`)
-   - Firewall allows UDP traffic
-   - Network supports WebRTC (some corporate networks block it)
+4. **Permissions**: Ensure camera/microphone permissions are granted on the PC
+5. **Platform Support**: Agora SDK supports Windows, Linux, and macOS
+6. **Token Expiration**: Tokens are valid for 1 hour by default. The server automatically generates new tokens when needed.
+7. **Channel Naming**: Channel names follow the pattern `{pc_id}_{stream_type}` (e.g., `PC-001_camera`)
+8. **UID**: Use `uid=0` for auto-assign, or specify a unique integer for each stream
+9. **No NAT Issues**: Agora handles all NAT traversal automatically - no TURN/STUN configuration needed
+10. **Cloud Infrastructure**: All media routing is handled by Agora's global infrastructure
 
 ---
 

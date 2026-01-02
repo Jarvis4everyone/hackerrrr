@@ -8,7 +8,7 @@ from app.websocket.connection_manager import manager
 from app.services.pc_service import PCService
 from app.services.execution_service import ExecutionService
 from app.services.log_service import LogService
-from app.services.webrtc_service import webrtc_service
+# WebRTC removed - using Agora now
 from app.services.file_service import FileService
 from app.services.terminal_service import terminal_service
 from app.websocket.terminal_handlers import forward_terminal_output

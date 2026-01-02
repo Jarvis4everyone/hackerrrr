@@ -111,10 +111,10 @@ class Settings(BaseSettings):
     WS_HEARTBEAT_TIMEOUT: int = 30
     WS_PING_INTERVAL: int = 30
     
-    # TURN Server Configuration (for WebRTC NAT traversal)
-    # Metered.ca free TURN server credentials
-    METERED_API_KEY: str = os.getenv("METERED_API_KEY", "4b7268b361c4e1a08789e6415026801bfb20")
-    METERED_API_URL: str = os.getenv("METERED_API_URL", "https://x1.metered.live/api/v1/turn/credentials")
+    # Agora Configuration
+    AGORA_APP_ID: str = os.getenv("AGORA_APP_ID", "7b3640aaf0394f8d809829db4abbe902")
+    AGORA_APP_CERTIFICATE: str = os.getenv("AGORA_APP_CERTIFICATE", "15b63fe200b44aa5a2428ace9d857ba4")
+    AGORA_TEMP_TOKEN: str = os.getenv("AGORA_TEMP_TOKEN", "007eJxTYIgsCZObte2wn++EMNMq9icLi4NZnXrkkzFykwmCcZm5kYJCamGRhbmqRZpFgYWFoYWaYkmSQmJaVaGhhtzw3PbAhkZLh3I5qVkQECQXwmhgpDBgYA3Xga0Q==")
     
     # Server URL (from .env, used in scripts)
     # Note: .env file uses "Serverurl" (case-sensitive)
