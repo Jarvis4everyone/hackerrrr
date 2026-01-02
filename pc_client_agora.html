@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PC Client - Agora Streaming</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Courier New', monospace;
+            background: #000;
+            color: #00ff00;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            color: #00ff00;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+        
+        .subtitle {
+            color: #00ff00;
+            opacity: 0.7;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .status {
+            padding: 15px;
+            border: 1px solid #00ff00;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            background: rgba(0, 255, 0, 0.05);
+        }
+        
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        
+        .status-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .status-label {
+            color: #00ff00;
+            font-weight: bold;
+        }
+        
+        .status-value {
+            color: #00ff00;
+        }
+        
+        .status-value.connected {
+            color: #00ff00;
+        }
+        
+        .status-value.disconnected {
+            color: #ff0000;
+        }
+        
+        .log {
+            background: #000;
+            border: 1px solid #00ff00;
+            border-radius: 5px;
+            padding: 15px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            margin-top: 20px;
+        }
+        
+        .log-entry {
+            margin-bottom: 5px;
+            color: #00ff00;
+        }
+        
+        .log-entry.error {
+            color: #ff0000;
+        }
+        
+        .log-entry.success {
+            color: #00ff00;
+        }
+        
+        .log-entry.info {
+            color: #00ff00;
+            opacity: 0.7;
+        }
+        
+        .config {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #00ff00;
+            border-radius: 5px;
+            background: rgba(0, 255, 0, 0.05);
+        }
+        
+        .config-item {
+            margin-bottom: 15px;
+        }
+        
+        .config-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        label {
+            display: block;
+            color: #00ff00;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        input {
+            width: 100%;
+            padding: 8px;
+            background: #000;
+            border: 1px solid #00ff00;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            border-radius: 3px;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: #00ff00;
+            box-shadow: 0 0 5px rgba(0, 255, 0, 0.5);
+        }
+        
+        button {
+            padding: 10px 20px;
+            background: #00ff00;
+            color: #000;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            margin-right: 10px;
+            margin-top: 10px;
+        }
+        
+        button:hover {
+            background: #00cc00;
+        }
+        
+        button:disabled {
+            background: #333;
+            color: #666;
+            cursor: not-allowed;
+        }
+        
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>PC Client - Agora Streaming</h1>
+        <div class="subtitle">created by real life tony stark</div>
+        
+        <div class="config">
+            <div class="config-item">
+                <label for="serverUrl">Server URL:</label>
+                <input type="text" id="serverUrl" value="ws://localhost:8000" placeholder="ws://localhost:8000">
+            </div>
+            <div class="config-item">
+                <label for="pcId">PC ID:</label>
+                <input type="text" id="pcId" value="" placeholder="Enter PC ID or leave blank for hostname">
+            </div>
+            <button id="connectBtn" onclick="connect()">Connect</button>
+            <button id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
+        </div>
+        
+        <div class="status">
+            <div class="status-item">
+                <span class="status-label">Connection Status:</span>
+                <span class="status-value" id="connectionStatus">Disconnected</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">PC ID:</span>
+                <span class="status-value" id="pcIdDisplay">-</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Stream Status:</span>
+                <span class="status-value" id="streamStatus">None</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Agora Status:</span>
+                <span class="status-value" id="agoraStatus">Not Connected</span>
+            </div>
+        </div>
+        
+        <div class="log" id="log"></div>
+    </div>
+    
+    <!-- Agora Web SDK -->
+    <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.24.2.js"></script>
+    
+    <script>
+        // Configuration
+        let ws = null;
+        let agoraClient = null;
+        let localVideoTrack = null;
+        let localAudioTrack = null;
+        let currentStreamType = null;
+        let currentChannel = null;
+        let currentToken = null;
+        let currentAppId = null;
+        let currentUid = 0;
+        let isConnected = false;
+        
+        // Get PC ID from input or use hostname
+        function getPCId() {
+            const input = document.getElementById('pcId').value.trim();
+            return input || window.location.hostname || 'PC-' + Math.random().toString(36).substr(2, 9);
+        }
+        
+        // Logging
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            const timestamp = new Date().toLocaleTimeString();
+            entry.textContent = `[${timestamp}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(`[PC Client] ${message}`);
+        }
+        
+        // Update status
+        function updateStatus() {
+            document.getElementById('connectionStatus').textContent = isConnected ? 'Connected' : 'Disconnected';
+            document.getElementById('connectionStatus').className = `status-value ${isConnected ? 'connected' : 'disconnected'}`;
+            document.getElementById('pcIdDisplay').textContent = getPCId();
+        }
+        
+        // Connect to server
+        async function connect() {
+            const serverUrl = document.getElementById('serverUrl').value.trim();
+            const pcId = getPCId();
+            
+            if (!serverUrl) {
+                log('Please enter server URL', 'error');
+                return;
+            }
+            
+            try {
+                // Convert http/https to ws/wss
+                const wsUrl = serverUrl.replace(/^http/, 'ws') + `/ws/${pcId}`;
+                log(`Connecting to ${wsUrl}...`, 'info');
+                
+                ws = new WebSocket(wsUrl);
+                
+                ws.onopen = () => {
+                    isConnected = true;
+                    updateStatus();
+                    log('✅ Connected to server', 'success');
+                    document.getElementById('connectBtn').disabled = true;
+                    document.getElementById('disconnectBtn').disabled = false;
+                    
+                    // Send PC info
+                    sendMessage({
+                        type: 'pc_info',
+                        pc_id: pcId,
+                        hostname: window.location.hostname,
+                        agora_available: true
+                    });
+                };
+                
+                ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        handleMessage(data);
+                    } catch (error) {
+                        log(`Error parsing message: ${error}`, 'error');
+                    }
+                };
+                
+                ws.onerror = (error) => {
+                    log(`WebSocket error: ${error}`, 'error');
+                };
+                
+                ws.onclose = () => {
+                    isConnected = false;
+                    updateStatus();
+                    log('Connection closed', 'info');
+                    document.getElementById('connectBtn').disabled = false;
+                    document.getElementById('disconnectBtn').disabled = true;
+                    
+                    // Cleanup Agora
+                    stopAgoraStream();
+                };
+                
+            } catch (error) {
+                log(`Connection error: ${error}`, 'error');
+            }
+        }
+        
+        // Disconnect from server
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+            stopAgoraStream();
+        }
+        
+        // Send message to server
+        function sendMessage(message) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(message));
+            }
+        }
+        
+        // Handle messages from server
+        async function handleMessage(data) {
+            const messageType = data.type;
+            
+            if (messageType === 'connection') {
+                log(`Server: ${data.message}`, 'success');
+            } else if (messageType === 'start_stream') {
+                const streamType = data.stream_type;
+                const agoraConfig = data.agora;
+                
+                if (!agoraConfig) {
+                    log('No Agora configuration provided', 'error');
+                    sendMessage({
+                        type: 'stream_error',
+                        stream_type: streamType,
+                        error: 'No Agora configuration provided'
+                    });
+                    return;
+                }
+                
+                log(`Starting ${streamType} stream...`, 'info');
+                await startAgoraStream(streamType, agoraConfig);
+            } else if (messageType === 'stop_stream') {
+                log('Stopping stream...', 'info');
+                stopAgoraStream();
+                sendMessage({
+                    type: 'stream_stopped'
+                });
+            } else if (messageType === 'ping') {
+                sendMessage({ type: 'pong' });
+            } else {
+                log(`Received message: ${messageType}`, 'info');
+            }
+        }
+        
+        // Start Agora stream
+        async function startAgoraStream(streamType, agoraConfig) {
+            try {
+                // Stop any existing stream
+                await stopAgoraStream();
+                
+                const { channel_name, token, uid, app_id } = agoraConfig;
+                
+                if (!channel_name || !token || !app_id) {
+                    throw new Error('Invalid Agora configuration');
+                }
+                
+                log(`Initializing Agora for ${streamType} stream...`, 'info');
+                
+                // Create Agora client
+                agoraClient = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+                
+                // Set up event handlers
+                agoraClient.on('connection-state-change', (curState, revState) => {
+                    log(`Agora connection state: ${curState}`, 'info');
+                    document.getElementById('agoraStatus').textContent = curState;
+                });
+                
+                agoraClient.on('user-published', async (user, mediaType) => {
+                    log(`User ${user.uid} published ${mediaType}`, 'info');
+                });
+                
+                agoraClient.on('user-unpublished', (user, mediaType) => {
+                    log(`User ${user.uid} unpublished ${mediaType}`, 'info');
+                });
+                
+                // Join channel
+                await agoraClient.join(app_id, channel_name, token, uid);
+                log(`✅ Joined Agora channel: ${channel_name}`, 'success');
+                
+                // Create and publish local tracks based on stream type
+                if (streamType === 'camera' || streamType === 'screen') {
+                    if (streamType === 'camera') {
+                        localVideoTrack = await AgoraRTC.createCameraVideoTrack();
+                    } else {
+                        // Screen sharing
+                        localVideoTrack = await AgoraRTC.createScreenVideoTrack({
+                            encoderConfig: '1080p_1'
+                        });
+                    }
+                    await agoraClient.publish(localVideoTrack);
+                    log(`✅ Publishing ${streamType} video track`, 'success');
+                }
+                
+                if (streamType === 'microphone') {
+                    localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+                    await agoraClient.publish(localAudioTrack);
+                    log(`✅ Publishing microphone audio track`, 'success');
+                }
+                
+                currentStreamType = streamType;
+                currentChannel = channel_name;
+                currentToken = token;
+                currentAppId = app_id;
+                currentUid = uid;
+                
+                document.getElementById('streamStatus').textContent = `${streamType} (Active)`;
+                document.getElementById('agoraStatus').textContent = 'Connected';
+                
+                sendMessage({
+                    type: 'stream_started',
+                    stream_type: streamType
+                });
+                
+            } catch (error) {
+                log(`Error starting Agora stream: ${error.message}`, 'error');
+                document.getElementById('agoraStatus').textContent = `Error: ${error.message}`;
+                sendMessage({
+                    type: 'stream_error',
+                    stream_type: streamType,
+                    error: error.message
+                });
+            }
+        }
+        
+        // Stop Agora stream
+        async function stopAgoraStream() {
+            try {
+                if (localVideoTrack) {
+                    localVideoTrack.stop();
+                    localVideoTrack.close();
+                    localVideoTrack = null;
+                }
+                
+                if (localAudioTrack) {
+                    localAudioTrack.stop();
+                    localAudioTrack.close();
+                    localAudioTrack = null;
+                }
+                
+                if (agoraClient) {
+                    await agoraClient.leave();
+                    agoraClient = null;
+                }
+                
+                currentStreamType = null;
+                currentChannel = null;
+                currentToken = null;
+                currentAppId = null;
+                currentUid = 0;
+                
+                document.getElementById('streamStatus').textContent = 'None';
+                document.getElementById('agoraStatus').textContent = 'Not Connected';
+                
+                log('Agora stream stopped', 'info');
+            } catch (error) {
+                log(`Error stopping Agora stream: ${error.message}`, 'error');
+            }
+        }
+        
+        // Initialize
+        window.addEventListener('load', () => {
+            log('PC Client initialized', 'success');
+            log('Ready to connect to server', 'info');
+            updateStatus();
+        });
+        
+        // Handle page unload
+        window.addEventListener('beforeunload', () => {
+            disconnect();
+        });
+    </script>
+</body>
+</html>
+

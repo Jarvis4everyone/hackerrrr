@@ -860,71 +860,71 @@ PC notifies server of any errors during streaming.
 
 ### Implementation Example
 
-**Using `pc_client_agora.py` (Recommended):**
+**Using `pc_client_agora.html` (Recommended - Web-Based):**
 
-The provided `pc_client_agora.py` includes full Agora SDK integration. Simply use it:
+The provided `pc_client_agora.html` uses Agora Web SDK and runs in any modern browser. Simply:
 
-```python
-from pc_client_agora import PCClientAgora
+1. Open `pc_client_agora.html` in your browser
+2. Enter server URL and PC ID
+3. Click "Connect"
+4. The client automatically handles all Agora streaming
 
-client = PCClientAgora(
-    server_url="wss://your-server.com",
-    pc_id="PC-001"
-)
+**Manual Implementation (JavaScript/Web):**
 
-await client.run()  # Handles all Agora streaming automatically
+```javascript
+// Load Agora Web SDK (from CDN or local file)
+// <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.24.2.js"></script>
+
+// When receiving start_stream message via WebSocket
+if (messageType === 'start_stream') {
+    const streamType = data.stream_type;
+    const agoraConfig = data.agora;
+    
+    if (!agoraConfig) {
+        sendError('No Agora configuration provided');
+        return;
+    }
+    
+    const { channel_name, token, uid, app_id } = agoraConfig;
+    
+    // Create Agora client
+    const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+    
+    // Join channel
+    await client.join(app_id, channel_name, token, uid);
+    
+    // Create and publish tracks based on stream type
+    if (streamType === 'camera') {
+        const videoTrack = await AgoraRTC.createCameraVideoTrack();
+        await client.publish(videoTrack);
+    } else if (streamType === 'screen') {
+        const screenTrack = await AgoraRTC.createScreenVideoTrack({
+            encoderConfig: '1080p_1'
+        });
+        await client.publish(screenTrack);
+    } else if (streamType === 'microphone') {
+        const audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+        await client.publish(audioTrack);
+    }
+    
+    // Send confirmation
+    websocket.send(JSON.stringify({
+        type: 'stream_started',
+        stream_type: streamType
+    }));
+}
 ```
 
-**Manual Implementation (if building custom client):**
+**Manual Implementation (Node.js/Electron):**
 
-```python
-from agora_rtc_sdk import AgoraRtcEngine, RtcEngineConfig
+If building a Node.js or Electron app, you can use the same Agora Web SDK:
 
-# When receiving start_stream message
-if message_type == "start_stream":
-    stream_type = data.get("stream_type")
-    agora_config = data.get("agora")
-    
-    if not agora_config:
-        await send_error("No Agora configuration provided")
-        return
-    
-    channel_name = agora_config.get("channel_name")
-    token = agora_config.get("token")
-    uid = agora_config.get("uid", 0)
-    app_id = agora_config.get("app_id")
-    
-    # Initialize Agora engine
-    config = RtcEngineConfig()
-    config.app_id = app_id
-    engine = AgoraRtcEngine.create_rtc_engine(config)
-    engine.initialize(config)
-    
-    # Enable appropriate media
-    if stream_type in ["camera", "screen"]:
-        engine.enable_video()
-        engine.enable_local_video(True)
-        
-        # Set video encoder configuration
-        engine.set_video_encoder_configuration({
-            'width': 1280,
-            'height': 720,
-            'frameRate': 30,
-            'bitrate': 2000
-        })
-    
-    if stream_type in ["microphone"]:
-        engine.enable_audio()
-        engine.enable_local_audio(True)
-    
-    # Join channel
-    engine.join_channel(token, channel_name, uid)
-    
-    # Send confirmation
-    await websocket.send(json.dumps({
-        "type": "stream_started",
-        "stream_type": stream_type
-    }))
+```javascript
+// In Electron main process or Node.js with jsdom
+const AgoraRTC = require('agora-rtc-sdk-ng');
+
+// Same implementation as web version above
+// Note: Electron apps can use Agora Web SDK directly
 ```
 
 ### Platform-Specific Media Access
@@ -965,18 +965,19 @@ pip install agora-token-builder
 npm install agora-rtc-sdk-ng
 ```
 
-**PC Client (Python):**
-```bash
-pip install agora-python-sdk
-```
+**PC Client (Web-Based - No Installation Required!):**
+- The PC client uses Agora Web SDK which loads from CDN
+- Simply open `pc_client_agora.html` in any modern browser
+- No installation, no native dependencies, no compilation needed!
 
-**Important Notes:**
-- The Agora Python SDK requires native dependencies and may need additional setup
-- For Windows: May require Visual C++ Redistributable
-- For Linux: May require additional system libraries (libc6, libstdc++6, etc.)
-- For macOS: Usually works out of the box
-- Refer to [Agora Python SDK Documentation](https://docs.agora.io/en/video-calling/get-started/get-started-sdk) for platform-specific installation instructions
-- If the Python SDK is not available, the PC client will report an error but can still connect to the server (streaming just won't work)
+**Alternative: Local SDK (Optional)**
+If you prefer to host the SDK locally instead of using CDN:
+1. Download Agora Web SDK from: https://docs.agora.io/en/video-calling/get-started/get-started-sdk
+2. Extract and place `AgoraRTC_N-4.24.2.js` in the same folder as `pc_client_agora.html`
+3. Update the script tag in `pc_client_agora.html`:
+   ```html
+   <script src="./AgoraRTC_N-4.24.2.js"></script>
+   ```
 
 ### Important Notes
 

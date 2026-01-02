@@ -62,51 +62,111 @@ No additional configuration needed - the frontend uses the Agora credentials fro
 
 ## PC Client Setup
 
-### 1. Install Agora Python SDK
+### 1. Using the Web-Based PC Client
 
-**Important**: The Agora Python SDK requires native dependencies and may need additional setup.
+The PC client uses **Agora Web SDK** (JavaScript) which runs in any modern web browser. This is much simpler than the Python SDK - no native dependencies or complex installation required!
 
-#### Option A: Using pip (if available)
+#### Quick Start
+
+1. **Open the PC Client:**
+   - Open `pc_client_agora.html` in any modern web browser (Chrome, Firefox, Edge, Safari)
+   - Or serve it via a local web server
+
+2. **Configure Connection:**
+   - Enter your server URL (e.g., `ws://localhost:8000` or `wss://your-server.com`)
+   - Enter your PC ID (or leave blank to use hostname)
+   - Click "Connect"
+
+3. **That's it!** The client will:
+   - Connect to the server via WebSocket
+   - Automatically handle Agora streaming when requested
+   - Display connection status and logs
+
+#### Serving the Client
+
+**Option 1: Direct File Open**
+- Simply double-click `pc_client_agora.html` to open in your default browser
+- Works for local development (localhost server)
+
+**Option 2: Local Web Server (Recommended for Production)**
 ```bash
-pip install agora-python-sdk
+# Using Python
+python -m http.server 8080
+
+# Using Node.js
+npx http-server -p 8080
+
+# Then open: http://localhost:8080/pc_client_agora.html
 ```
 
-#### Option B: Manual Installation
-1. Download the Agora Python SDK from: https://docs.agora.io/en/video-calling/get-started/get-started-sdk
-2. Follow platform-specific installation instructions
-3. For Windows: May require Visual C++ Redistributable
-4. For Linux: May require additional system libraries
+**Option 3: Deploy to Web Server**
+- Upload `pc_client_agora.html` to any web server
+- Access via URL: `https://your-domain.com/pc_client_agora.html`
 
-### 2. Using the PC Client
+#### Browser Requirements
 
-```python
-from pc_client_agora import PCClientAgora
+- **Chrome/Edge**: Full support (recommended)
+- **Firefox**: Full support
+- **Safari**: Full support (macOS/iOS)
+- **Opera**: Full support
 
-# Create client
-client = PCClientAgora(
-    server_url="wss://your-server.com",
-    pc_id="PC-001"
-)
+**Required Permissions:**
+- Camera access (for camera streaming)
+- Microphone access (for microphone streaming)
+- Screen sharing permissions (for screen streaming)
 
-# Run client (handles all Agora streaming automatically)
-await client.run()
-```
+The browser will prompt for these permissions when you start a stream.
+
+### 2. How It Works
+
+1. **WebSocket Connection**: Client connects to server via WebSocket
+2. **Agora Web SDK**: Uses Agora Web SDK (loaded from CDN) for streaming
+3. **Automatic Handling**: When server sends `start_stream` message with Agora config, client:
+   - Joins Agora channel
+   - Creates and publishes appropriate media tracks (camera/microphone/screen)
+   - Sends confirmation back to server
 
 ### 3. Platform-Specific Notes
 
 #### Windows
-- Camera: Automatically detects available cameras
-- Microphone: Uses default audio input device
-- Screen: Requires screen capture permissions
+- Camera: Browser automatically detects available cameras
+- Microphone: Browser uses default audio input device
+- Screen: Browser handles screen sharing (Chrome/Edge recommended)
 
 #### Linux
-- Camera: Uses `/dev/video0`, `/dev/video1`, etc.
-- Microphone: Uses default PulseAudio device
-- Screen: Requires X11 or Wayland screen capture support
+- Camera: Browser accesses `/dev/video0`, `/dev/video1`, etc.
+- Microphone: Browser uses default PulseAudio device
+- Screen: Browser handles screen sharing (may require X11)
 
 #### macOS
-- Camera/Microphone: Requires permissions in System Preferences
-- Screen: Requires screen recording permissions
+- Camera/Microphone: Browser requests permissions automatically
+- Screen: Browser handles screen sharing (requires screen recording permission in System Preferences)
+
+### 4. Troubleshooting
+
+**Problem: Cannot access camera/microphone**
+- **Solution**: Grant permissions in browser settings
+  - Chrome: Settings > Privacy and Security > Site Settings > Camera/Microphone
+  - Firefox: Preferences > Privacy & Security > Permissions
+  - Safari: System Preferences > Security & Privacy > Camera/Microphone
+
+**Problem: Screen sharing not working**
+- **Solution**: 
+  - Chrome/Edge: Click the screen share button and select screen/window
+  - Firefox: Grant screen sharing permission
+  - macOS: Grant screen recording permission in System Preferences
+
+**Problem: WebSocket connection fails**
+- **Solution**: 
+  - Check server URL is correct
+  - For `wss://`, ensure server has valid SSL certificate
+  - Check firewall/network settings
+
+**Problem: Agora SDK not loading**
+- **Solution**: 
+  - Check internet connection (SDK loads from CDN)
+  - Verify browser console for errors
+  - Try using a different browser
 
 ## How It Works
 
@@ -178,14 +238,30 @@ Examples:
 
 ### PC Client Issues
 
-**Problem**: Agora SDK not available
-- **Solution**: Install Agora Python SDK with platform-specific dependencies
-
-**Problem**: Camera/microphone not accessible
-- **Solution**: Grant permissions in system settings
+**Problem**: Browser cannot access camera/microphone
+- **Solution**: 
+  - Grant permissions in browser settings
+  - Chrome: Settings > Privacy and Security > Site Settings > Camera/Microphone
+  - Firefox: Preferences > Privacy & Security > Permissions
+  - Ensure the page is served over HTTPS or localhost (required for camera/mic access)
 
 **Problem**: Screen sharing not working
-- **Solution**: Grant screen recording permissions (macOS) or use X11 (Linux)
+- **Solution**: 
+  - Grant screen sharing permission when browser prompts
+  - macOS: Also grant screen recording permission in System Preferences > Security & Privacy
+  - Use Chrome/Edge for best screen sharing support
+
+**Problem**: WebSocket connection fails
+- **Solution**: 
+  - Verify server URL is correct (use `ws://` for HTTP, `wss://` for HTTPS)
+  - Check browser console for connection errors
+  - Ensure server is running and accessible
+
+**Problem**: Agora SDK not loading
+- **Solution**: 
+  - Check internet connection (SDK loads from CDN)
+  - Verify browser console for script loading errors
+  - Try refreshing the page or clearing browser cache
 
 ## Security Notes
 
