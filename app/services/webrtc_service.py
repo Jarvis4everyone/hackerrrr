@@ -47,6 +47,8 @@ class WebRTCService:
         self.pc_tracks: Dict[str, list] = {}
         # Media relay for sharing media tracks
         self.relay = MediaRelay()
+        # Store ICE candidate callbacks: {pc_id: callback_function}
+        self.ice_candidate_callbacks: Dict[str, callable] = {}
     
     async def create_peer_connection(self, pc_id: str, on_ice_candidate=None) -> RTCPeerConnection:
         """Create a new RTCPeerConnection for a PC"""
@@ -87,11 +89,18 @@ class WebRTCService:
                 self.pc_tracks[pc_id] = []
             self.pc_tracks[pc_id].append(track)
         
-        # Handle ICE candidates
+        # Handle ICE candidates - send to PC client
         @pc.on("icecandidate")
         async def on_ice_candidate_event(event):
-            if event.candidate and on_ice_candidate:
-                await on_ice_candidate(pc_id, event.candidate)
+            if event.candidate:
+                # Call the provided callback if available
+                if on_ice_candidate:
+                    await on_ice_candidate(pc_id, event.candidate)
+                # Also call stored callback if available
+                if pc_id in self.ice_candidate_callbacks:
+                    callback = self.ice_candidate_callbacks[pc_id]
+                    if callback:
+                        await callback(pc_id, event.candidate)
         
         # Handle connection state changes
         @pc.on("connectionstatechange")
@@ -197,12 +206,16 @@ class WebRTCService:
             logger.error(f"[WebRTC] Error stopping stream for {pc_id}: {e}")
             return False
     
-    async def handle_offer(self, pc_id: str, offer_sdp: str) -> Optional[str]:
+    async def handle_offer(self, pc_id: str, offer_sdp: str, ice_candidate_callback=None) -> Optional[str]:
         """Handle WebRTC offer from PC and return answer"""
         try:
+            # Store ICE candidate callback for this PC
+            if ice_candidate_callback:
+                self.ice_candidate_callbacks[pc_id] = ice_candidate_callback
+            
             if pc_id not in self.peer_connections:
                 logger.warning(f"[WebRTC] No peer connection for {pc_id}, creating new one")
-                await self.create_peer_connection(pc_id)
+                await self.create_peer_connection(pc_id, ice_candidate_callback)
             
             pc = self.peer_connections[pc_id]
             
@@ -216,11 +229,15 @@ class WebRTCService:
             answer = await pc.createAnswer()
             await pc.setLocalDescription(answer)
             
-            logger.info(f"[WebRTC] Created answer for {pc_id}")
+            logger.info(f"[WebRTC] Created answer for {pc_id}, SDP length: {len(answer.sdp)}")
+            
+            # Log connection state
+            logger.info(f"[WebRTC] {pc_id} connection state after answer: {pc.connectionState}")
+            
             return pc.localDescription.sdp
             
         except Exception as e:
-            logger.error(f"[WebRTC] Error handling offer for {pc_id}: {e}")
+            logger.error(f"[WebRTC] Error handling offer for {pc_id}: {e}", exc_info=True)
             await self.cleanup_connection(pc_id)
             return None
     
@@ -278,6 +295,8 @@ class WebRTCService:
         await self.stop_stream(pc_id)
         if pc_id in self.pc_tracks:
             del self.pc_tracks[pc_id]
+        if pc_id in self.ice_candidate_callbacks:
+            del self.ice_candidate_callbacks[pc_id]
     
     def get_pc_tracks(self, pc_id: str, track_kind: str = None):
         """Get tracks for a PC, optionally filtered by kind"""

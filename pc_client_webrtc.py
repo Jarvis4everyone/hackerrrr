@@ -127,10 +127,37 @@ class PCClientWebRTC:
             logger.info(f"[WebRTC] Received track: {track.kind}")
             # Handle incoming tracks from server if needed
         
+        # Handle ICE candidates - send to server
+        @pc.on("icecandidate")
+        async def on_ice_candidate(event):
+            if event.candidate and self.websocket and self.running:
+                try:
+                    # Format candidate for sending
+                    candidate_data = {
+                        "candidate": str(event.candidate.candidate) if hasattr(event.candidate, 'candidate') else str(event.candidate),
+                        "sdpMLineIndex": getattr(event.candidate, 'sdpMLineIndex', None),
+                        "sdpMid": getattr(event.candidate, 'sdpMid', None)
+                    }
+                    
+                    await self.websocket.send(json.dumps({
+                        "type": "webrtc_ice_candidate",
+                        "candidate": candidate_data
+                    }))
+                    logger.debug(f"[WebRTC] Sent ICE candidate to server")
+                except Exception as e:
+                    logger.error(f"[WebRTC] Error sending ICE candidate: {e}")
+        
         @pc.on("connectionstatechange")
         async def on_connectionstatechange():
-            logger.info(f"[WebRTC] Connection state: {pc.connectionState}")
-            if pc.connectionState in ["failed", "closed", "disconnected"]:
+            state = pc.connectionState
+            logger.info(f"[WebRTC] Connection state: {state}")
+            if state == "connected":
+                logger.info(f"[WebRTC] ✅ Connection established successfully!")
+            elif state == "failed":
+                logger.error(f"[WebRTC] ❌ Connection failed - all ICE candidates failed")
+                logger.error(f"[WebRTC] This usually means NAT traversal failed. Consider using a TURN server.")
+            elif state in ["closed", "disconnected"]:
+                logger.warning(f"[WebRTC] Connection {state}")
                 await self.stop_stream()
         
         self.peer_connection = pc
@@ -323,12 +350,25 @@ class PCClientWebRTC:
         """Handle ICE candidate from server"""
         try:
             if not self.peer_connection:
+                logger.warning("[WebRTC] No peer connection for ICE candidate")
                 return
             
-            await self.peer_connection.addIceCandidate(candidate)
+            # Convert dict to RTCIceCandidate if needed
+            if isinstance(candidate, dict):
+                from aiortc import RTCIceCandidate
+                ice_candidate = RTCIceCandidate(
+                    candidate=candidate.get("candidate", ""),
+                    sdpMLineIndex=candidate.get("sdpMLineIndex"),
+                    sdpMid=candidate.get("sdpMid")
+                )
+            else:
+                ice_candidate = candidate
+            
+            await self.peer_connection.addIceCandidate(ice_candidate)
+            logger.debug(f"[WebRTC] Added ICE candidate from server")
             
         except Exception as e:
-            logger.error(f"[!] Error handling ICE candidate: {e}")
+            logger.error(f"[!] Error handling ICE candidate: {e}", exc_info=True)
     
     async def send_message(self, message: dict):
         """Send a message to the server"""

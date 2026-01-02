@@ -220,12 +220,32 @@ async def handle_websocket_connection(websocket: WebSocket, pc_id: str):
                     # PC sends offer, server creates answer
                     offer_sdp = data.get("sdp")
                     if offer_sdp:
-                        answer_sdp = await webrtc_service.handle_offer(pc_id, offer_sdp)
+                        # Define callback to send ICE candidates back to PC
+                        async def send_ice_candidate_to_pc(pc_id: str, candidate):
+                            """Send ICE candidate from server to PC client"""
+                            try:
+                                # Format candidate for sending
+                                candidate_data = {
+                                    "candidate": str(candidate.candidate) if hasattr(candidate, 'candidate') else str(candidate),
+                                    "sdpMLineIndex": getattr(candidate, 'sdpMLineIndex', None),
+                                    "sdpMid": getattr(candidate, 'sdpMid', None)
+                                }
+                                
+                                await websocket.send_json({
+                                    "type": "webrtc_ice_candidate",
+                                    "candidate": candidate_data
+                                })
+                                logger.debug(f"[WebRTC] Sent ICE candidate to {pc_id}")
+                            except Exception as e:
+                                logger.error(f"[WebRTC] Error sending ICE candidate to {pc_id}: {e}")
+                        
+                        answer_sdp = await webrtc_service.handle_offer(pc_id, offer_sdp, send_ice_candidate_to_pc)
                         if answer_sdp:
                             await websocket.send_json({
                                 "type": "webrtc_answer",
                                 "sdp": answer_sdp
                             })
+                            logger.info(f"[WebRTC] Sent answer to {pc_id}")
                         else:
                             await websocket.send_json({
                                 "type": "webrtc_error",
