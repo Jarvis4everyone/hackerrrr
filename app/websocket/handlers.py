@@ -215,39 +215,21 @@ async def handle_websocket_connection(websocket: WebSocket, pc_id: str):
                     except Exception as e:
                         logger.error(f"Error saving log from {pc_id}: {e}")
                 
-                # WebRTC Signaling Messages
-                elif message_type == "webrtc_offer":
-                    # PC sends offer, server creates answer
-                    offer_sdp = data.get("sdp")
-                    if offer_sdp:
-                        answer_sdp = await webrtc_service.handle_offer(pc_id, offer_sdp)
-                        if answer_sdp:
-                            await websocket.send_json({
-                                "type": "webrtc_answer",
-                                "sdp": answer_sdp
-                            })
-                        else:
-                            await websocket.send_json({
-                                "type": "webrtc_error",
-                                "message": "Failed to create answer"
-                            })
-                
-                elif message_type == "webrtc_answer":
-                    # PC sends answer (for server-initiated connections)
-                    answer_sdp = data.get("sdp")
-                    if answer_sdp:
-                        await webrtc_service.handle_answer(pc_id, answer_sdp)
-                
-                elif message_type == "webrtc_ice_candidate":
-                    # PC sends ICE candidate
-                    candidate = data.get("candidate")
-                    if candidate:
-                        await webrtc_service.handle_ice_candidate(pc_id, candidate)
-                
-                elif message_type == "webrtc_stream_ready":
-                    # PC confirms stream is ready
+                # Agora Streaming Messages
+                elif message_type == "stream_started":
+                    # PC confirms Agora stream has started
                     stream_type = data.get("stream_type")
-                    logger.info(f"[WebRTC] {pc_id} stream ready: {stream_type}")
+                    logger.info(f"[Agora] {pc_id} stream started: {stream_type}")
+                
+                elif message_type == "stream_stopped":
+                    # PC confirms Agora stream has stopped
+                    logger.info(f"[Agora] {pc_id} stream stopped")
+                
+                elif message_type == "stream_error":
+                    # PC reports Agora stream error
+                    stream_type = data.get("stream_type")
+                    error = data.get("error")
+                    logger.error(f"[Agora] {pc_id} stream error ({stream_type}): {error}")
                 
                 elif message_type == "file_download_response":
                     # PC sends file download response
