@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { Camera, Power, PowerOff, RefreshCw } from 'lucide-react'
 import { getPCs, getWebSocketUrl } from '../services/api'
 import { useToast } from '../components/ToastContainer'
+import { useStreaming } from '../contexts/StreamingContext'
 
 const CameraPage = () => {
   const [pcs, setPCs] = useState([])
@@ -11,14 +12,17 @@ const CameraPage = () => {
   const videoRef = useRef(null)
   const wsRef = useRef(null)
   const { showToast } = useToast()
+  const { setStreamActive, registerStopCallback, unregisterStopCallback } = useStreaming()
 
   useEffect(() => {
     loadPCs()
     return () => {
       // Cleanup on unmount
       if (wsRef.current) {
-        wsRef.current.close()
+        stopStream()
       }
+      unregisterStopCallback('camera')
+      setStreamActive('camera', false)
     }
   }, [])
 

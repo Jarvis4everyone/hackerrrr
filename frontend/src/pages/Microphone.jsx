@@ -186,6 +186,8 @@ const MicrophonePage = () => {
         console.log('[Microphone] WebSocket closed')
         setIsStreaming(false)
         setAudioLevel(0)
+        setStreamActive('microphone', false)
+        unregisterStopCallback('microphone')
       }
 
       wsRef.current = ws

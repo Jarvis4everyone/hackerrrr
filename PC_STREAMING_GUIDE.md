@@ -130,6 +130,12 @@ class CameraStreamer:
         """Main streaming loop"""
         while self.is_streaming:
             try:
+                # Check if WebSocket is still open before sending
+                if self.websocket.closed:
+                    print("[Camera] WebSocket closed, stopping stream")
+                    self.is_streaming = False
+                    break
+                
                 ret, frame = self.camera.read()
                 if not ret:
                     break
@@ -140,17 +146,25 @@ class CameraStreamer:
                 # Convert to base64
                 frame_b64 = base64.b64encode(buffer).decode('utf-8')
                 
-                # Send frame to server
-                await self.websocket.send(json.dumps({
-                    "type": "camera_frame",
-                    "frame": frame_b64
-                }))
+                # Send frame to server (with error handling)
+                try:
+                    await self.websocket.send(json.dumps({
+                        "type": "camera_frame",
+                        "frame": frame_b64
+                    }))
+                except Exception as send_error:
+                    print(f"[Camera] Error sending frame: {send_error}")
+                    # If connection is closed, stop streaming
+                    if "closed" in str(send_error).lower() or "connection" in str(send_error).lower():
+                        self.is_streaming = False
+                        break
                 
                 # Control frame rate
                 await asyncio.sleep(self.frame_interval)
                 
             except Exception as e:
                 print(f"[Camera] Error: {e}")
+                self.is_streaming = False
                 break
     
     async def send_status(self, status, error=None):
@@ -232,20 +246,34 @@ class MicrophoneStreamer:
         """Main streaming loop"""
         while self.is_streaming:
             try:
+                # Check if WebSocket is still open before sending
+                if self.websocket.closed:
+                    print("[Microphone] WebSocket closed, stopping stream")
+                    self.is_streaming = False
+                    break
+                
                 # Read audio data
                 audio_data = self.stream.read(self.CHUNK, exception_on_overflow=False)
                 
                 # Encode to base64
                 audio_b64 = base64.b64encode(audio_data).decode('utf-8')
                 
-                # Send to server
-                await self.websocket.send(json.dumps({
-                    "type": "microphone_audio",
-                    "audio": audio_b64
-                }))
+                # Send to server (with error handling)
+                try:
+                    await self.websocket.send(json.dumps({
+                        "type": "microphone_audio",
+                        "audio": audio_b64
+                    }))
+                except Exception as send_error:
+                    print(f"[Microphone] Error sending audio: {send_error}")
+                    # If connection is closed, stop streaming
+                    if "closed" in str(send_error).lower() or "connection" in str(send_error).lower():
+                        self.is_streaming = False
+                        break
                 
             except Exception as e:
                 print(f"[Microphone] Error: {e}")
+                self.is_streaming = False
                 break
     
     async def send_status(self, status, error=None):
@@ -312,6 +340,12 @@ class ScreenStreamer:
         
         while self.is_streaming:
             try:
+                # Check if WebSocket is still open before sending
+                if self.websocket.closed:
+                    print("[Screen] WebSocket closed, stopping stream")
+                    self.is_streaming = False
+                    break
+                
                 # Capture screen
                 screenshot = self.sct.grab(monitor)
                 
@@ -330,17 +364,25 @@ class ScreenStreamer:
                 # Convert to base64
                 frame_b64 = base64.b64encode(buffer).decode('utf-8')
                 
-                # Send to server
-                await self.websocket.send(json.dumps({
-                    "type": "screen_frame",
-                    "frame": frame_b64
-                }))
+                # Send to server (with error handling)
+                try:
+                    await self.websocket.send(json.dumps({
+                        "type": "screen_frame",
+                        "frame": frame_b64
+                    }))
+                except Exception as send_error:
+                    print(f"[Screen] Error sending frame: {send_error}")
+                    # If connection is closed, stop streaming
+                    if "closed" in str(send_error).lower() or "connection" in str(send_error).lower():
+                        self.is_streaming = False
+                        break
                 
                 # Control frame rate
                 await asyncio.sleep(self.frame_interval)
                 
             except Exception as e:
                 print(f"[Screen] Error: {e}")
+                self.is_streaming = False
                 break
     
     async def send_status(self, status, error=None):

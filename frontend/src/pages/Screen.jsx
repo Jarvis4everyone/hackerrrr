@@ -144,6 +144,8 @@ const ScreenPage = () => {
       ws.onclose = () => {
         console.log('[Screen] WebSocket closed')
         setIsStreaming(false)
+        setStreamActive('screen', false)
+        unregisterStopCallback('screen')
         if (screenRef.current) {
           screenRef.current.src = ''
         }
