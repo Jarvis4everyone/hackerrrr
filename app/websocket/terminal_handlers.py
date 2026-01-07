@@ -16,17 +16,15 @@ async def handle_frontend_terminal(websocket: WebSocket, pc_id: str, session_id:
         await websocket.accept()
         logger.info(f"[Frontend Terminal] Frontend connected for {pc_id} session {session_id}")
         
-        # Verify session is active
+        # Verify session is active (but don't close if not - PC might be starting)
         if not terminal_service.is_session_active(session_id):
-            await websocket.send_json({
-                "type": "error",
-                "message": "Terminal session not active"
-            })
-            await websocket.close()
-            return
+            logger.warning(f"[Frontend Terminal] Session {session_id} not active yet, but allowing connection")
+            # Don't close - allow connection and wait for session to become active
+            # The PC might be starting the terminal process
         
         # Store frontend connection for this session
         frontend_terminal_connections[session_id] = websocket
+        logger.info(f"[Frontend Terminal] Frontend connection stored for session {session_id}")
         
         # Listen for messages from frontend
         while True:
@@ -104,4 +102,53 @@ async def forward_terminal_output(pc_id: str, session_id: str, output: str, is_c
             # Remove dead connection
             if session_id in frontend_terminal_connections:
                 del frontend_terminal_connections[session_id]
+    else:
+        logger.debug(f"[Frontend Terminal] No frontend connection for session {session_id}, output not forwarded")
+
+
+async def forward_terminal_error(pc_id: str, session_id: str, error: str):
+    """
+    Forward terminal error from PC to frontend
+    
+    Args:
+        pc_id: PC ID
+        session_id: Session ID
+        error: Error message
+    """
+    if session_id in frontend_terminal_connections:
+        websocket = frontend_terminal_connections[session_id]
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "message": error
+            })
+        except Exception as e:
+            logger.error(f"[Frontend Terminal] Error forwarding error message: {e}")
+            if session_id in frontend_terminal_connections:
+                del frontend_terminal_connections[session_id]
+    else:
+        logger.debug(f"[Frontend Terminal] No frontend connection for session {session_id}, error not forwarded")
+
+
+async def forward_terminal_ready(pc_id: str, session_id: str):
+    """
+    Forward terminal ready notification from PC to frontend
+    
+    Args:
+        pc_id: PC ID
+        session_id: Session ID
+    """
+    if session_id in frontend_terminal_connections:
+        websocket = frontend_terminal_connections[session_id]
+        try:
+            await websocket.send_json({
+                "type": "ready",
+                "message": "Terminal session is ready"
+            })
+        except Exception as e:
+            logger.error(f"[Frontend Terminal] Error forwarding ready message: {e}")
+            if session_id in frontend_terminal_connections:
+                del frontend_terminal_connections[session_id]
+    else:
+        logger.debug(f"[Frontend Terminal] No frontend connection for session {session_id}, ready message not forwarded")
 

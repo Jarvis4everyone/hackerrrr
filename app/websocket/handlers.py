@@ -312,12 +312,19 @@ async def handle_websocket_connection(websocket: WebSocket, pc_id: str):
                     session_id = data.get("session_id")
                     if session_id:
                         logger.info(f"[Terminal] {pc_id} terminal session ready: {session_id}")
+                        # Forward ready notification to frontend
+                        from app.websocket.terminal_handlers import forward_terminal_ready
+                        await forward_terminal_ready(pc_id, session_id)
                 
                 elif message_type == "terminal_error":
                     # PC reports terminal error
                     session_id = data.get("session_id")
                     error = data.get("error", "Unknown error")
                     logger.error(f"[Terminal] {pc_id} session {session_id} error: {error}")
+                    # Forward error to frontend
+                    if session_id:
+                        from app.websocket.terminal_handlers import forward_terminal_error
+                        await forward_terminal_error(pc_id, session_id, error)
                 
                 else:
                     logger.debug(f"[{pc_id}] Received message type: {message_type}")

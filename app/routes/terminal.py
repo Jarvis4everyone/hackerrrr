@@ -28,7 +28,11 @@ async def start_terminal_session(
     """
     # Check if PC is connected
     if not manager.is_connected(pc_id):
-        raise HTTPException(status_code=404, detail=f"PC '{pc_id}' is not connected")
+        # Also check database for connection status
+        from app.services.pc_service import PCService
+        pc = await PCService.get_pc(pc_id)
+        if not pc or not pc.connected:
+            raise HTTPException(status_code=404, detail=f"PC '{pc_id}' is not connected")
     
     # Generate unique session ID
     session_id = str(uuid.uuid4())
