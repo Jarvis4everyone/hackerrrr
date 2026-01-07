@@ -27,9 +27,9 @@ function App() {
                       <Route path="/" element={<Dashboard />} />
                       <Route path="/pcs" element={<PCs />} />
                       <Route path="/scripts" element={<Scripts />} />
-                      <Route path="/logs" element={<Logs />} />
                       <Route path="/directory" element={<Directory />} />
                       <Route path="/terminal" element={<Terminal />} />
+                      <Route path="/logs" element={<Logs />} />
                       <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
                   </Layout>

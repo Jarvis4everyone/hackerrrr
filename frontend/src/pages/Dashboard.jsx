@@ -92,12 +92,6 @@ const Dashboard = () => {
       description: 'Execute scripts on connected devices'
     },
     {
-      path: '/logs',
-      icon: FileText,
-      title: 'Logs',
-      description: 'View script execution logs and results'
-    },
-    {
       path: '/directory',
       icon: Folder,
       title: 'Directory',
@@ -108,6 +102,12 @@ const Dashboard = () => {
       icon: Terminal,
       title: 'Terminal',
       description: 'Remote terminal access to PCs'
+    },
+    {
+      path: '/logs',
+      icon: FileText,
+      title: 'Logs',
+      description: 'View script execution logs and results'
     }
   ]
 

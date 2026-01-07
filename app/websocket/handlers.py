@@ -134,6 +134,8 @@ async def handle_websocket_connection(websocket: WebSocket, pc_id: str):
                     error_message = data.get("error_message")
                     result = data.get("result")
                     
+                    logger.info(f"[{pc_id}] Received execution_complete - execution_id: {execution_id}, status: {status}")
+                    
                     if execution_id:
                         # Update execution status
                         execution = await ExecutionService.update_execution_status(
@@ -143,76 +145,71 @@ async def handle_websocket_connection(websocket: WebSocket, pc_id: str):
                             result=result
                         )
                         
+                        logger.info(f"[{pc_id}] Execution status updated - execution_id: {execution_id}, status: {status}")
+                        
                         # Store complete log content if provided in result
-                        # PC clients now send complete log file content in execution_complete message
+                        # PC clients may send complete log file content in execution_complete message
                         if execution and result and isinstance(result, dict):
                             log_content = result.get("log_content")
                             log_file_path = result.get("log_file")
                             
-                            # Only store log if log_content is provided (new format)
-                            # The complete log file content should be stored as a single log entry
+                            # Store log if log_content is provided
+                            # Note: PC may have already sent this via "log" message, but we store it anyway
+                            # to ensure we have the complete log file
                             if log_content:
                                 try:
-                                    # Check if log already exists for this execution
-                                    existing_logs = await LogService.get_execution_logs(execution_id)
-                                    
-                                    # Only create log if it doesn't exist yet
-                                    # (PC may send log in both "log" message and "execution_complete")
-                                    if not existing_logs:
-                                        log_entry = LogCreate(
-                                            pc_id=pc_id,
-                                            script_name=execution.script_name,
-                                            execution_id=execution_id,
-                                            log_file_path=log_file_path,
-                                            log_content=log_content,  # Complete log file content (multiline)
-                                            log_level="INFO"  # Default level, actual level may be in log content
-                                        )
-                                        await LogService.create_log(log_entry)
-                                        logger.info(f"[{pc_id}] Complete log stored for execution {execution_id}: {execution.script_name}")
-                                    else:
-                                        logger.debug(f"[{pc_id}] Log already exists for execution {execution_id}, skipping duplicate")
+                                    log_entry = LogCreate(
+                                        pc_id=pc_id,
+                                        script_name=execution.script_name,
+                                        execution_id=execution_id,
+                                        log_file_path=log_file_path,
+                                        log_content=log_content,
+                                        log_level="SUCCESS" if status == "success" else "ERROR"
+                                    )
+                                    stored_log = await LogService.create_log(log_entry)
+                                    logger.info(f"[{pc_id}] Complete log stored from execution_complete - ID: {stored_log.id}, execution: {execution_id}")
                                 except Exception as e:
-                                    logger.error(f"Error storing log from execution_complete: {e}")
+                                    logger.error(f"[{pc_id}] Error storing log from execution_complete: {e}", exc_info=True)
+                    else:
+                        logger.warning(f"[{pc_id}] Received execution_complete without execution_id")
                 
                 elif message_type == "log":
-                    # Receive complete log file content from PC
-                    # PC clients now send the complete log file content as a single message after script execution
+                    # Receive log messages from PC client
+                    # PC clients send logs at multiple points:
+                    # 1. Initial log when script starts
+                    # 2. Chunked logs during execution (stdout/stderr)
+                    # 3. Success/Error log after completion
+                    # 4. Complete log file content after execution
                     try:
                         execution_id = data.get("execution_id")
+                        script_name = data.get("script_name", "unknown")
                         log_content = data.get("log_content", "")
+                        log_level = data.get("log_level", "INFO")
+                        log_file_path = data.get("log_file_path")
                         
-                        # Check if log already exists for this execution
-                        # (PC may send log in both "log" message and "execution_complete")
-                        if execution_id:
-                            existing_logs = await LogService.get_execution_logs(execution_id)
-                            if existing_logs:
-                                logger.debug(f"[{pc_id}] Log already exists for execution {execution_id}, skipping duplicate")
-                            else:
-                                # Store complete log file content
-                                log_entry = LogCreate(
-                                    pc_id=pc_id,
-                                    script_name=data.get("script_name", "unknown"),
-                                    execution_id=execution_id,
-                                    log_file_path=data.get("log_file_path"),
-                                    log_content=log_content,  # Complete log file content (multiline string)
-                                    log_level=data.get("log_level", "INFO")
-                                )
-                                await LogService.create_log(log_entry)
-                                logger.info(f"[{pc_id}] Complete log file stored: {log_entry.script_name} (execution: {execution_id})")
-                        else:
-                            # Fallback: Store log even without execution_id (backward compatibility)
+                        # Log the received message for debugging
+                        logger.info(f"[{pc_id}] Received log message - script: {script_name}, execution_id: {execution_id}, level: {log_level}, content_length: {len(log_content)}")
+                        
+                        # Always store log messages - PC may send multiple logs for same execution
+                        # (initial log, chunked logs, complete log file, etc.)
+                        if log_content:  # Only store if there's actual content
                             log_entry = LogCreate(
                                 pc_id=pc_id,
-                                script_name=data.get("script_name", "unknown"),
+                                script_name=script_name,
                                 execution_id=execution_id,
-                                log_file_path=data.get("log_file_path"),
+                                log_file_path=log_file_path,
                                 log_content=log_content,
-                                log_level=data.get("log_level", "INFO")
+                                log_level=log_level
                             )
-                            await LogService.create_log(log_entry)
-                            logger.info(f"[{pc_id}] Log stored (no execution_id): {log_entry.script_name}")
+                            
+                            stored_log = await LogService.create_log(log_entry)
+                            logger.info(f"[{pc_id}] Log stored successfully - ID: {stored_log.id}, script: {script_name}, execution: {execution_id}, level: {log_level}")
+                        else:
+                            logger.warning(f"[{pc_id}] Received log message with empty content - script: {script_name}, execution_id: {execution_id}")
+                            
                     except Exception as e:
-                        logger.error(f"Error saving log from {pc_id}: {e}")
+                        logger.error(f"[{pc_id}] Error saving log message: {e}", exc_info=True)
+                        logger.error(f"[{pc_id}] Failed log data: script_name={data.get('script_name')}, execution_id={data.get('execution_id')}, log_level={data.get('log_level')}")
                 
                 elif message_type == "file_download_response":
                     # PC sends file download response

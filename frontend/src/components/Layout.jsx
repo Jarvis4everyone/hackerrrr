@@ -28,9 +28,9 @@ const Layout = ({ children }) => {
     { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/pcs', icon: Monitor, label: 'PCs' },
     { path: '/scripts', icon: FileCode, label: 'Scripts' },
-    { path: '/logs', icon: FileText, label: 'Logs' },
     { path: '/directory', icon: Folder, label: 'Directory' },
     { path: '/terminal', icon: Terminal, label: 'Terminal' },
+    { path: '/logs', icon: FileText, label: 'Logs' },
   ]
 
   const isActive = (path) => {
