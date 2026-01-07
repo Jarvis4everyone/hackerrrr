@@ -10,6 +10,9 @@ import Scripts from './pages/Scripts'
 import Logs from './pages/Logs'
 import Directory from './pages/Directory'
 import Terminal from './pages/Terminal'
+import Camera from './pages/Camera'
+import Microphone from './pages/Microphone'
+import Screen from './pages/Screen'
 
 function App() {
   return (
@@ -30,6 +33,9 @@ function App() {
                       <Route path="/directory" element={<Directory />} />
                       <Route path="/terminal" element={<Terminal />} />
                       <Route path="/logs" element={<Logs />} />
+                      <Route path="/camera" element={<Camera />} />
+                      <Route path="/microphone" element={<Microphone />} />
+                      <Route path="/screen" element={<Screen />} />
                       <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
                   </Layout>

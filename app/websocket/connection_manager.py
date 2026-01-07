@@ -174,6 +174,10 @@ class ConnectionManager:
             # If we can't check, assume it's disconnected
             return False
     
+    def get_connection(self, pc_id: str) -> Optional[WebSocket]:
+        """Get WebSocket connection for a PC"""
+        return self.active_connections.get(pc_id)
+    
     async def ensure_connection_synced(self, pc_id: str) -> bool:
         """Ensure connection is properly synced between WebSocket and database"""
         is_ws_connected = self.is_connected(pc_id)

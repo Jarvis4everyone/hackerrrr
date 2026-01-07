@@ -8,6 +8,9 @@ import {
   FileText,
   Folder,
   Terminal,
+  Camera,
+  Mic,
+  ScreenShare,
   Menu,
   X,
   LogOut
@@ -31,6 +34,9 @@ const Layout = ({ children }) => {
     { path: '/directory', icon: Folder, label: 'Directory' },
     { path: '/terminal', icon: Terminal, label: 'Terminal' },
     { path: '/logs', icon: FileText, label: 'Logs' },
+    { path: '/camera', icon: Camera, label: 'Camera' },
+    { path: '/microphone', icon: Mic, label: 'Microphone' },
+    { path: '/screen', icon: ScreenShare, label: 'Screen' },
   ]
 
   const isActive = (path) => {

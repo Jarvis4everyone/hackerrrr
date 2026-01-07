@@ -11,6 +11,7 @@ from app.services.log_service import LogService
 from app.services.file_service import FileService
 from app.services.terminal_service import terminal_service
 from app.websocket.terminal_handlers import forward_terminal_output
+from app.services.streaming_service import streaming_service
 from app.models.log import LogCreate
 from app.config import settings
 import logging
@@ -332,6 +333,54 @@ async def handle_websocket_connection(websocket: WebSocket, pc_id: str):
                         from app.websocket.terminal_handlers import forward_terminal_error
                         await forward_terminal_error(pc_id, session_id, error)
                 
+                elif message_type == "camera_frame":
+                    # PC sends camera frame (base64 encoded JPEG)
+                    frame_data = data.get("frame")
+                    if frame_data:
+                        # Forward to all frontend connections
+                        await streaming_service.broadcast_to_frontend(
+                            pc_id, 
+                            "camera", 
+                            {"type": "camera_frame", "frame": frame_data}
+                        )
+                
+                elif message_type == "microphone_audio":
+                    # PC sends microphone audio chunk (base64 encoded)
+                    audio_data = data.get("audio")
+                    if audio_data:
+                        # Forward to all frontend connections
+                        await streaming_service.broadcast_to_frontend(
+                            pc_id,
+                            "microphone",
+                            {"type": "microphone_audio", "audio": audio_data}
+                        )
+                
+                elif message_type == "screen_frame":
+                    # PC sends screen frame (base64 encoded JPEG)
+                    frame_data = data.get("frame")
+                    if frame_data:
+                        # Forward to all frontend connections
+                        await streaming_service.broadcast_to_frontend(
+                            pc_id,
+                            "screen",
+                            {"type": "screen_frame", "frame": frame_data}
+                        )
+                
+                elif message_type == "stream_status":
+                    # PC reports streaming status
+                    stream_type = data.get("stream_type")  # 'camera', 'microphone', 'screen'
+                    status = data.get("status")  # 'started', 'stopped', 'error'
+                    error = data.get("error")
+                    
+                    if stream_type:
+                        is_streaming = status == "started"
+                        await streaming_service.set_pc_streaming_status(pc_id, stream_type, is_streaming)
+                        
+                        if status == "error":
+                            logger.error(f"[Streaming] {pc_id} {stream_type} error: {error}")
+                        else:
+                            logger.info(f"[Streaming] {pc_id} {stream_type}: {status}")
+                
                 else:
                     logger.debug(f"[{pc_id}] Received message type: {message_type}")
                     
@@ -362,5 +411,8 @@ async def handle_websocket_connection(websocket: WebSocket, pc_id: str):
     except Exception as e:
         logger.error(f"WebSocket error for {pc_id}: {e}")
     finally:
+        # Clean up streaming connections when PC disconnects
+        from app.services.streaming_service import streaming_service
+        await streaming_service.cleanup_pc_connections(pc_id)
         await manager.disconnect(pc_id)
 

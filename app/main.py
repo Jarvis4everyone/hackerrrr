@@ -139,6 +139,10 @@ app.include_router(files.router)
 from app.routes import terminal
 app.include_router(terminal.router)
 
+# Import and include streaming router
+from app.routes import streaming
+app.include_router(streaming.router)
+
 
 # WebSocket endpoint for PC connections
 @app.websocket("/ws/{pc_id}")
@@ -152,6 +156,17 @@ async def frontend_terminal_endpoint(websocket: WebSocket, pc_id: str, session_i
     """WebSocket endpoint for frontend terminal sessions"""
     from app.websocket.terminal_handlers import handle_frontend_terminal
     await handle_frontend_terminal(websocket, pc_id, session_id)
+
+# WebSocket endpoints for frontend streaming connections
+@app.websocket("/ws/stream/{pc_id}/{stream_type}")
+async def frontend_stream_endpoint(websocket: WebSocket, pc_id: str, stream_type: str):
+    """WebSocket endpoint for frontend streaming connections"""
+    if stream_type not in ['camera', 'microphone', 'screen']:
+        await websocket.close(code=1008, reason="Invalid stream type")
+        return
+    
+    from app.websocket.streaming_handlers import handle_frontend_stream
+    await handle_frontend_stream(websocket, pc_id, stream_type)
 
 
 if __name__ == "__main__":
