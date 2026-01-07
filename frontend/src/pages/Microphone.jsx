@@ -97,12 +97,14 @@ const MicrophonePage = () => {
               const sampleRate = data.sample_rate || 44100
               const channels = data.channels || 1
               
-              // Use counter state to ensure sequential numbering
+              // Use counter state to ensure sequential numbering - increment first
               setChunkCounter(prev => {
-                const chunkNumber = prev + 1
+                const newChunkNumber = prev + 1
+                
+                // Create chunk with the new number
                 const chunk = {
                   id: chunkId,
-                  chunkNumber: chunkNumber,
+                  chunkNumber: newChunkNumber,
                   audioData: data.audio, // Base64 encoded
                   duration: duration,
                   sampleRate: sampleRate,
@@ -111,9 +113,11 @@ const MicrophonePage = () => {
                   size: Math.round((atob(data.audio).length / 1024) * 100) / 100 // Size in KB
                 }
                 
+                // Add chunk to list
                 setAudioChunks(prevChunks => [...prevChunks, chunk])
-                showToast(`Received audio chunk ${chunkNumber}`, 'info')
-                return chunkNumber
+                showToast(`Received audio chunk ${newChunkNumber}`, 'info')
+                
+                return newChunkNumber
               })
             } catch (error) {
               console.error('[Microphone] Error processing audio chunk:', error)
