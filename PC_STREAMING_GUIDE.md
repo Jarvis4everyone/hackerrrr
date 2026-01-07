@@ -11,8 +11,12 @@ The streaming system uses WebSocket to send frames/audio chunks from the PC to t
 1. **PC Client** captures video/audio/screen frames
 2. **PC Client** encodes frames to JPEG (for video/screen) or raw audio bytes
 3. **PC Client** sends frames via WebSocket as base64-encoded strings
-4. **Server** receives frames and forwards to all connected frontend clients
+   - **Camera/Screen**: Continuous frame streaming (~30 FPS)
+   - **Microphone**: 5-second audio chunks
+4. **Server** receives frames/chunks and forwards to all connected frontend clients
 5. **Frontend** displays video/audio using HTML5 elements
+   - **Camera/Screen**: Real-time video display
+   - **Microphone**: Chunk list with play/download options
 
 ## Message Types
 
@@ -44,11 +48,16 @@ The streaming system uses WebSocket to send frames/audio chunks from the PC to t
 }
 ```
 
-#### Microphone Audio
+#### Microphone Audio (5-second chunks)
 ```json
 {
   "type": "microphone_audio",
-  "audio": "<base64_encoded_audio_bytes>"
+  "audio": "<base64_encoded_audio_bytes>",
+  "chunk_number": 1,
+  "duration": 5.0,
+  "sample_rate": 44100,
+  "channels": 1,
+  "format": "pcm"
 }
 ```
 
@@ -243,7 +252,12 @@ class MicrophoneStreamer:
         await self.send_status("stopped")
     
     async def stream_loop(self):
-        """Main streaming loop"""
+        """Main streaming loop - sends 5-second audio chunks"""
+        import time
+        
+        chunk_duration = 5.0  # 5 seconds per chunk
+        chunk_number = 0
+        
         while self.is_streaming:
             try:
                 # Check if WebSocket is still open before sending
@@ -252,20 +266,50 @@ class MicrophoneStreamer:
                     self.is_streaming = False
                     break
                 
-                # Read audio data
-                audio_data = self.stream.read(self.CHUNK, exception_on_overflow=False)
+                chunk_number += 1
+                chunk_start_time = time.time()
+                chunk_audio_data = []
+                
+                # Collect audio data for 5 seconds
+                while (time.time() - chunk_start_time) < chunk_duration and self.is_streaming:
+                    if self.websocket.closed:
+                        self.is_streaming = False
+                        break
+                    
+                    try:
+                        # Read audio data
+                        audio_data = self.stream.read(self.CHUNK, exception_on_overflow=False)
+                        chunk_audio_data.append(audio_data)
+                    except Exception as e:
+                        print(f"[Microphone] Error reading audio: {e}")
+                        break
+                
+                if not self.is_streaming or self.websocket.closed:
+                    break
+                
+                # Combine all audio chunks into one
+                combined_audio = b''.join(chunk_audio_data)
+                
+                if len(combined_audio) == 0:
+                    continue
                 
                 # Encode to base64
-                audio_b64 = base64.b64encode(audio_data).decode('utf-8')
+                audio_b64 = base64.b64encode(combined_audio).decode('utf-8')
                 
                 # Send to server (with error handling)
                 try:
                     await self.websocket.send(json.dumps({
                         "type": "microphone_audio",
-                        "audio": audio_b64
+                        "audio": audio_b64,
+                        "chunk_number": chunk_number,
+                        "duration": chunk_duration,
+                        "sample_rate": self.RATE,
+                        "channels": self.CHANNELS,
+                        "format": "pcm"
                     }))
+                    print(f"[Microphone] Sent chunk {chunk_number} ({len(combined_audio)} bytes)")
                 except Exception as send_error:
-                    print(f"[Microphone] Error sending audio: {send_error}")
+                    print(f"[Microphone] Error sending audio chunk {chunk_number}: {send_error}")
                     # If connection is closed, stop streaming
                     if "closed" in str(send_error).lower() or "connection" in str(send_error).lower():
                         self.is_streaming = False
