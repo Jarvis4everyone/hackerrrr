@@ -2,23 +2,9 @@
 
 This document explains the paths that the server should use when requesting files from the PC client.
 
-## Important: Use Executable Paths Only - NO USER FOLDERS
+## Important: Use Executable Paths Only
 
-**CRITICAL**: The server MUST use paths relative to the PC client's executable directory (the malware exe directory). 
-
-**DO NOT use paths from user folders** like:
-- ❌ `C:\Users\...`
-- ❌ `C:\Users\Username\Documents\...`
-- ❌ `C:\Users\Username\Pictures\...`
-- ❌ `C:\Users\Username\Music\...`
-- ❌ Any absolute paths from user directories
-
-**ONLY use paths from the malware executable directory**:
-- ✅ `Audios/audio (1).mp3` (relative to exe directory)
-- ✅ `build/WindowsMalwareProtection/...` (relative to exe directory)
-- ✅ `logs/...` (relative to exe directory)
-
-The PC client includes specific folders (`build` and `Audios`) in the executable, and the server should ONLY request files from these folders relative to the malware exe directory.
+**CRITICAL**: The server MUST use paths relative to the PC client's executable directory. The PC client includes specific folders (`build` and `Audios`) in the executable, and the server should ONLY request files from these folders.
 
 ## Folder Structure in Executable
 
@@ -71,22 +57,6 @@ All folder paths are resolved relative to this base path.
 
 **Server should request**: `Audios/audio (1).mp3` (relative path from executable directory)
 
-**Note**: Do NOT request audio files from user folders like `C:\Users\...\Music\...` or `C:\Users\...\Downloads\...`. Only use paths from the `Audios/` folder in the executable directory.
-
-### Photos Folder (if included in executable)
-
-**Path**: `Photos/` (relative to executable directory, if included)
-
-**Example paths**:
-- `Photos/1.jpg`
-- `Photos/2.jpg`
-- `Photos/attack.mp3`
-- `Photos/...` (all photo/image files)
-
-**Server should request**: `Photos/1.jpg` (relative path from executable directory)
-
-**Note**: Do NOT request photos from user folders like `C:\Users\...\Pictures\...` or `C:\Users\...\Downloads\...`. Only use paths from the `Photos/` folder in the executable directory (if it exists in the exe).
-
 ## File Download Request Format
 
 When the server requests a file download, it should use relative paths from the executable directory:
@@ -109,33 +79,15 @@ Or for build files:
 }
 ```
 
-Or for photos/images (if Photos folder exists in executable):
-
-```json
-{
-  "type": "download_file",
-  "file_path": "Photos/1.jpg",
-  "request_id": "unique-request-id"
-}
-```
-
 ## Important Notes
 
 1. **DO NOT use absolute paths**: The server should NEVER send absolute paths like `C:\Users\...` or `/home/user/...`
-2. **DO NOT use user folder paths**: The server should NEVER request files from user directories like:
-   - `C:\Users\...`
-   - `C:\Users\Username\Documents\...`
-   - `C:\Users\Username\Pictures\...`
-   - `C:\Users\Username\Music\...`
-   - Any other user folder paths
-3. **ONLY use executable directory paths**: The server should ONLY request files from the malware executable directory:
-   - `build/` folder (relative to exe directory)
-   - `Audios/` folder (relative to exe directory)
-   - `Photos/` folder (relative to exe directory, if included in executable)
-   - `logs/` folder (relative to exe directory, for log files)
-4. **Path separator**: Use forward slashes `/` in paths (the PC client will handle Windows backslashes automatically)
-5. **Case sensitivity**: On Windows, paths are case-insensitive, but it's best to match the exact case used in the folder names
-6. **All paths must be relative**: All file paths must be relative to the malware executable directory, never absolute paths
+2. **DO NOT use paths outside executable directory**: The server should ONLY request files from:
+   - `build/` folder
+   - `Audios/` folder
+   - `logs/` folder (for log files)
+3. **Path separator**: Use forward slashes `/` in paths (the PC client will handle Windows backslashes automatically)
+4. **Case sensitivity**: On Windows, paths are case-insensitive, but it's best to match the exact case used in the folder names
 
 ## PC Client Implementation
 
@@ -162,9 +114,8 @@ When handling file download requests, the PC client:
 
 The PC client should validate that requested file paths:
 - Are relative paths (not absolute)
-- Are within allowed folders (`build/`, `Audios/`, `Photos/`, `logs/`)
+- Are within allowed folders (`build/`, `Audios/`, `logs/`)
 - Do not contain path traversal attempts (`../`, `..\\`, etc.)
-- Do not reference user folders (`Users/`, `Documents/`, `Pictures/`, `Music/`, etc.)
 
 ## Example Server Implementation
 
@@ -181,25 +132,20 @@ def request_file_from_pc(pc_id, file_path):
     Returns:
         File content or error
     """
-    # Validate path is relative (not absolute)
+    # Validate path is relative
     if os.path.isabs(file_path):
-        raise ValueError("File path must be relative to executable directory, not absolute")
+        raise ValueError("File path must be relative, not absolute")
     
-    # Reject user folder paths
-    user_folder_indicators = ['Users', 'Documents', 'Pictures', 'Music', 'Downloads', 'Desktop']
-    if any(indicator in file_path for indicator in user_folder_indicators):
-        raise ValueError("File path must be from executable directory, not user folders")
-    
-    # Validate path is in allowed folders (relative to exe directory)
-    allowed_folders = ['build', 'Audios', 'Photos', 'logs']
+    # Validate path is in allowed folders
+    allowed_folders = ['build', 'Audios', 'logs']
     first_part = file_path.split('/')[0].split('\\')[0]
     if first_part not in allowed_folders:
-        raise ValueError(f"File path must be in one of: {allowed_folders} (relative to executable directory)")
+        raise ValueError(f"File path must be in one of: {allowed_folders}")
     
     # Send download_file request to PC client
     message = {
         "type": "download_file",
-        "file_path": file_path,  # Relative path from exe directory
+        "file_path": file_path,  # Relative path
         "request_id": generate_unique_id()
     }
     send_to_pc(pc_id, message)
