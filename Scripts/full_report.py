@@ -654,8 +654,25 @@ def get_recent_files():
         try:
             files = os.listdir(recent_path)
             for f in files[:50]:  # Limit to 50
-                recent_files.append(f)
-        except:
+                file_path = os.path.join(recent_path, f)
+                try:
+                    # Get file stats
+                    stat = os.stat(file_path)
+                    modified = datetime.fromtimestamp(stat.st_mtime).isoformat()
+                    size = stat.st_size
+                except:
+                    modified = "N/A"
+                    size = 0
+                
+                # Return as dictionary with file information
+                recent_files.append({
+                    'name': f,
+                    'path': file_path,
+                    'modified': modified,
+                    'size': size
+                })
+        except Exception as e:
+            # Return empty list on error, don't crash
             pass
     return recent_files
 
