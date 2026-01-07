@@ -15,23 +15,81 @@ class LogService:
     
     @staticmethod
     async def create_log(log: LogCreate) -> LogInDB:
-        """Create a new log entry"""
+        """Create or update a log entry for an execution_id.
+        
+        If a log entry already exists for the execution_id, append the new content.
+        If not, create a new log entry.
+        This ensures all logs for the same execution are stored in a single document.
+        """
         db = get_database()
         now = datetime.utcnow()
         
-        log_data = {
-            "pc_id": log.pc_id,
-            "script_name": log.script_name,
-            "execution_id": log.execution_id,
-            "log_file_path": log.log_file_path,
-            "log_content": log.log_content,
-            "log_level": log.log_level,
-            "timestamp": now
-        }
+        # Check if log entry already exists for this execution_id
+        existing_log = None
+        if log.execution_id:
+            existing_log = await db.logs.find_one({"execution_id": log.execution_id})
         
-        result = await db.logs.insert_one(log_data)
-        log_data["_id"] = str(result.inserted_id)
-        return LogInDB(**log_data)
+        if existing_log:
+            # Update existing log: append content, update level, file path, and timestamp
+            existing_content = existing_log.get("log_content", "")
+            new_content = log.log_content
+            
+            # Append new content with newline separator if both exist
+            if existing_content and new_content:
+                combined_content = f"{existing_content}\n{new_content}"
+            elif existing_content:
+                combined_content = existing_content
+            else:
+                combined_content = new_content
+            
+            # Determine log level priority (SUCCESS > ERROR > WARNING > INFO > DEBUG)
+            level_priority = {"SUCCESS": 5, "ERROR": 4, "WARNING": 3, "INFO": 2, "DEBUG": 1}
+            existing_level = existing_log.get("log_level", "INFO")
+            new_level = log.log_level or "INFO"
+            
+            # Use the higher priority level
+            if level_priority.get(new_level.upper(), 2) > level_priority.get(existing_level.upper(), 2):
+                final_level = new_level
+            else:
+                final_level = existing_level
+            
+            # Update log file path if new one is provided
+            final_file_path = log.log_file_path if log.log_file_path else existing_log.get("log_file_path")
+            
+            # Update the document
+            update_data = {
+                "log_content": combined_content,
+                "log_level": final_level,
+                "timestamp": now  # Update to latest timestamp
+            }
+            
+            if final_file_path:
+                update_data["log_file_path"] = final_file_path
+            
+            await db.logs.update_one(
+                {"_id": existing_log["_id"]},
+                {"$set": update_data}
+            )
+            
+            # Return updated log
+            updated_log = await db.logs.find_one({"_id": existing_log["_id"]})
+            updated_log["_id"] = str(updated_log["_id"])
+            return LogInDB(**updated_log)
+        else:
+            # Create new log entry
+            log_data = {
+                "pc_id": log.pc_id,
+                "script_name": log.script_name,
+                "execution_id": log.execution_id,
+                "log_file_path": log.log_file_path,
+                "log_content": log.log_content,
+                "log_level": log.log_level,
+                "timestamp": now
+            }
+            
+            result = await db.logs.insert_one(log_data)
+            log_data["_id"] = str(result.inserted_id)
+            return LogInDB(**log_data)
     
     @staticmethod
     async def get_log(log_id: str) -> Optional[LogInDB]:
