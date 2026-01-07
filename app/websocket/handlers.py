@@ -93,6 +93,13 @@ async def handle_websocket_connection(websocket: WebSocket, pc_id: str):
                     if isinstance(metadata, dict) and "ip_address" in metadata:
                         metadata = {k: v for k, v in metadata.items() if k != "ip_address"}
                     
+                    # CRITICAL: Ensure WebSocket connection is registered in manager
+                    # If pc_info is received but connection is not in manager, add it
+                    if not manager.is_connected(pc_id):
+                        logger.warning(f"[{pc_id}] Received pc_info but WebSocket not in active_connections - registering connection")
+                        # Re-register the connection
+                        manager.active_connections[pc_id] = websocket
+                    
                     # CRITICAL: Ensure connected status is true when receiving pc_info
                     # This ensures PC is marked as online even if connection handler missed it
                     await PCService.update_connection_status(pc_id, connected=True)

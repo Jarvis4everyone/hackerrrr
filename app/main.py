@@ -24,9 +24,50 @@ logger = logging.getLogger(__name__)
 
 
 
+async def cleanup_stale_connections():
+    """Periodically clean up stale connections"""
+    import asyncio
+    from datetime import datetime, timedelta
+    from app.services.pc_service import PCService
+    from app.websocket.connection_manager import manager
+    
+    while True:
+        try:
+            await asyncio.sleep(60)  # Check every 60 seconds
+            
+            # Mark PCs as offline if they haven't sent a heartbeat in 90 seconds
+            cutoff_time = datetime.utcnow() - timedelta(seconds=90)
+            
+            # Get all PCs marked as connected in DB
+            from app.database import get_database
+            db = get_database()
+            
+            stale_pcs = await db.pcs.find({
+                "connected": True,
+                "last_seen": {"$lt": cutoff_time}
+            }).to_list(length=100)
+            
+            for pc_data in stale_pcs:
+                pc_id = pc_data.get("pc_id")
+                if pc_id:
+                    # Check if WebSocket is still active
+                    if not manager.is_connected(pc_id):
+                        logger.info(f"Marking stale PC as offline: {pc_id} (last_seen: {pc_data.get('last_seen')})")
+                        await PCService.update_connection_status(pc_id, connected=False)
+            
+            # Also sync active WebSocket connections with DB
+            for pc_id in list(manager.active_connections.keys()):
+                await manager.ensure_connection_synced(pc_id)
+                
+        except Exception as e:
+            logger.error(f"Error in cleanup_stale_connections: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
+    import asyncio
+    
     # Startup
     logger.info("Starting application...")
     await connect_to_mongo()
@@ -42,10 +83,19 @@ async def lifespan(app: FastAPI):
         logger.info(f"Scripts directory found: {scripts_dir}")
         logger.info(f"Project root: {PROJECT_ROOT}")
     
+    # Start background task for connection cleanup
+    cleanup_task = asyncio.create_task(cleanup_stale_connections())
+    logger.info("Started background task for connection cleanup")
+    
     yield
     
     # Shutdown
     logger.info("Shutting down application...")
+    cleanup_task.cancel()
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        pass
     await close_mongo_connection()
 
 

@@ -22,6 +22,19 @@ class ConnectionManager:
     async def connect(self, websocket: WebSocket, pc_id: str, pc_name: str = None, 
                      ip_address: str = None, hostname: str = None):
         """Accept and register a new WebSocket connection"""
+        # Handle reconnection: if PC already has a connection, disconnect the old one first
+        if pc_id in self.active_connections:
+            old_websocket = self.active_connections[pc_id]
+            logger.info(f"[!] PC {pc_id} reconnecting - closing old connection")
+            try:
+                # Try to close old connection gracefully
+                await old_websocket.close()
+            except:
+                pass
+            # Remove old connection
+            del self.active_connections[pc_id]
+        
+        # Accept new connection
         await websocket.accept()
         self.active_connections[pc_id] = websocket
         
@@ -47,13 +60,26 @@ class ConnectionManager:
     
     async def disconnect(self, pc_id: str):
         """Remove a WebSocket connection"""
-        if pc_id in self.active_connections:
-            del self.active_connections[pc_id]
+        was_connected = pc_id in self.active_connections
         
-        # Update PC in database
+        if was_connected:
+            # Try to close WebSocket gracefully
+            try:
+                websocket = self.active_connections[pc_id]
+                await websocket.close()
+            except Exception as e:
+                logger.debug(f"Error closing WebSocket for {pc_id}: {e}")
+            finally:
+                del self.active_connections[pc_id]
+        
+        # Always update database, even if not in active_connections
+        # This ensures DB is in sync
         await PCService.update_connection_status(pc_id, connected=False)
         
-        logger.info(f"[-] PC disconnected: {pc_id}")
+        if was_connected:
+            logger.info(f"[-] PC disconnected: {pc_id}")
+        else:
+            logger.debug(f"[-] PC {pc_id} disconnect called but was not in active connections")
     
     async def send_personal_message(self, message: dict, pc_id: str) -> bool:
         """Send a message to a specific PC"""
@@ -130,8 +156,43 @@ class ConnectionManager:
         return await self.send_personal_message(message, pc_id)
     
     def is_connected(self, pc_id: str) -> bool:
-        """Check if a PC is connected"""
-        return pc_id in self.active_connections
+        """Check if a PC is connected (WebSocket only)"""
+        if pc_id not in self.active_connections:
+            return False
+        
+        # Verify the WebSocket is still valid
+        websocket = self.active_connections[pc_id]
+        try:
+            # Check if WebSocket is still open by checking its state
+            # FastAPI WebSocket has a client_state attribute
+            if hasattr(websocket, 'client_state'):
+                # If client_state is None or DISCONNECTED, connection is dead
+                if websocket.client_state is None:
+                    return False
+            return True
+        except:
+            # If we can't check, assume it's disconnected
+            return False
+    
+    async def ensure_connection_synced(self, pc_id: str) -> bool:
+        """Ensure connection is properly synced between WebSocket and database"""
+        is_ws_connected = self.is_connected(pc_id)
+        pc = await PCService.get_pc(pc_id)
+        is_db_connected = pc and pc.connected if pc else False
+        
+        # If WebSocket says connected but DB says not, update DB
+        if is_ws_connected and not is_db_connected:
+            logger.info(f"Syncing connection status for {pc_id}: WebSocket=True, DB=False -> updating DB")
+            await PCService.update_connection_status(pc_id, connected=True)
+            return True
+        
+        # If DB says connected but WebSocket says not, update DB
+        if not is_ws_connected and is_db_connected:
+            logger.info(f"Syncing connection status for {pc_id}: WebSocket=False, DB=True -> updating DB")
+            await PCService.update_connection_status(pc_id, connected=False)
+            return False
+        
+        return is_ws_connected
     
     def get_connected_count(self) -> int:
         """Get count of connected PCs"""
