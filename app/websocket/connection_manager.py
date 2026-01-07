@@ -65,12 +65,21 @@ class ConnectionManager:
                 # Update last_seen
                 await PCService.update_last_seen(pc_id)
                 
+                logger.debug(f"Message sent successfully to {pc_id}")
                 return True
             except Exception as e:
                 logger.error(f"Error sending message to {pc_id}: {e}")
+                # Disconnect and mark as disconnected in DB
                 await self.disconnect(pc_id)
                 return False
-        return False
+        else:
+            logger.warning(f"PC {pc_id} not in active connections, cannot send message")
+            # Check if PC is still marked as connected in DB
+            pc = await PCService.get_pc(pc_id)
+            if pc and pc.connected:
+                logger.warning(f"PC {pc_id} is marked as connected in DB but not in active connections - marking as disconnected")
+                await PCService.update_connection_status(pc_id, connected=False)
+            return False
     
     async def broadcast(self, message: dict):
         """Broadcast a message to all connected PCs"""

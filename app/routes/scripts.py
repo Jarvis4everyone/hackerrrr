@@ -8,6 +8,9 @@ from app.services.pc_service import PCService
 from app.websocket.connection_manager import manager
 from app.models.request import SendScriptRequest, BroadcastScriptRequest
 from app.config import settings
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/scripts", tags=["Scripts"])
 
@@ -42,9 +45,26 @@ async def send_script(request: SendScriptRequest):
     server_url = request.server_url
     params_to_use = request.script_params
     
-    # Check if PC is connected
-    if not manager.is_connected(pc_id):
+    logger.info(f"Attempting to send script '{script_name}' to PC '{pc_id}'")
+    
+    # Check if PC is connected (check both WebSocket connection and database status)
+    is_ws_connected = manager.is_connected(pc_id)
+    pc = await PCService.get_pc(pc_id)
+    is_db_connected = pc and pc.connected if pc else False
+    
+    logger.info(f"PC '{pc_id}' connection status: WebSocket={is_ws_connected}, Database={is_db_connected}")
+    
+    # Allow if either WebSocket or database says connected
+    # This handles race conditions and ensures we don't miss connected PCs
+    if not is_ws_connected and not is_db_connected:
+        logger.warning(f"PC '{pc_id}' is not connected (WS={is_ws_connected}, DB={is_db_connected})")
         raise HTTPException(status_code=404, detail=f"PC '{pc_id}' is not connected")
+    
+    # If WebSocket is not connected but DB says it is, log and proceed
+    # This handles cases where WebSocket connection exists but manager hasn't updated yet
+    if not is_ws_connected and is_db_connected:
+        logger.warning(f"PC '{pc_id}' is connected in DB but not in WebSocket manager - connection may have been lost, but proceeding")
+        # Try to send anyway - if WebSocket is really disconnected, send_personal_message will fail
     
     # Get script content
     script_content = await ScriptService.get_script_content(script_name)
