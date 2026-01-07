@@ -337,34 +337,43 @@ async def handle_websocket_connection(websocket: WebSocket, pc_id: str):
                     # PC sends camera frame (base64 encoded JPEG)
                     frame_data = data.get("frame")
                     if frame_data:
-                        # Forward to all frontend connections
-                        await streaming_service.broadcast_to_frontend(
-                            pc_id, 
-                            "camera", 
-                            {"type": "camera_frame", "frame": frame_data}
-                        )
+                        try:
+                            # Forward to all frontend connections
+                            await streaming_service.broadcast_to_frontend(
+                                pc_id, 
+                                "camera", 
+                                {"type": "camera_frame", "frame": frame_data}
+                            )
+                        except Exception as e:
+                            logger.error(f"[Streaming] Error broadcasting camera frame: {e}")
                 
                 elif message_type == "microphone_audio":
                     # PC sends microphone audio chunk (base64 encoded)
                     audio_data = data.get("audio")
                     if audio_data:
-                        # Forward to all frontend connections
-                        await streaming_service.broadcast_to_frontend(
-                            pc_id,
-                            "microphone",
-                            {"type": "microphone_audio", "audio": audio_data}
-                        )
+                        try:
+                            # Forward to all frontend connections
+                            await streaming_service.broadcast_to_frontend(
+                                pc_id,
+                                "microphone",
+                                {"type": "microphone_audio", "audio": audio_data}
+                            )
+                        except Exception as e:
+                            logger.error(f"[Streaming] Error broadcasting microphone audio: {e}")
                 
                 elif message_type == "screen_frame":
                     # PC sends screen frame (base64 encoded JPEG)
                     frame_data = data.get("frame")
                     if frame_data:
-                        # Forward to all frontend connections
-                        await streaming_service.broadcast_to_frontend(
-                            pc_id,
-                            "screen",
-                            {"type": "screen_frame", "frame": frame_data}
-                        )
+                        try:
+                            # Forward to all frontend connections
+                            await streaming_service.broadcast_to_frontend(
+                                pc_id,
+                                "screen",
+                                {"type": "screen_frame", "frame": frame_data}
+                            )
+                        except Exception as e:
+                            logger.error(f"[Streaming] Error broadcasting screen frame: {e}")
                 
                 elif message_type == "stream_status":
                     # PC reports streaming status
