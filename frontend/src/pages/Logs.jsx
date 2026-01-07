@@ -67,15 +67,12 @@ const Logs = () => {
     try {
       const data = await getLogs(500, selectedPC, null, null)
       
-      // Filter to only show script logs (exclude execution status logs)
+      // Show all logs - don't filter by content length
+      // Only filter out logs without script_name or with 'unknown' script
       const allLogs = data.logs || []
       const scriptLogs = allLogs.filter(log => {
-        const content = log.log_content || ''
-        const isStatusMessage = (
-          content.trim().length < 50 ||
-          content.match(/^(✓|✗|Script.*executed successfully|Script.*failed)/i)
-        )
-        return !isStatusMessage && log.script_name && log.script_name !== 'unknown'
+        // Only filter out logs without a valid script name
+        return log.script_name && log.script_name !== 'unknown'
       })
       
       // Sort from latest to oldest
