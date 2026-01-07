@@ -401,6 +401,10 @@ const TerminalPage = () => {
       setTimeout(() => {
         connectWebSocket(selectedPC, sessId)
         setIsStarting(false)
+        
+        // Register with streaming context after connection is established
+        setStreamActive('terminal', true)
+        registerStopCallback('terminal', handleStopSession)
       }, 1500)
     } catch (error) {
       console.error('Error starting terminal session:', error)
