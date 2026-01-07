@@ -91,22 +91,25 @@ def minimize_all_windows():
 # ============================================
 def find_photos_folder():
     """Find the Photos folder containing 1.jpg through 9.jpg
-    Uses C:\Users\shres\Audios as primary location"""
-    # Primary location (user specified)
-    primary_path = r"C:\Users\shres\Audios"
+    Uses user's Audios folder as primary location"""
+    # Primary location (user's home directory)
+    user_home = os.path.expanduser("~")
+    primary_path = os.path.join(user_home, "Audios")
     
     # System locations (deployed by PC client - most persistent)
     localappdata = os.environ.get('LOCALAPPDATA', '')
     search_paths = [
-        # PRIMARY: User-specified location
+        # PRIMARY: User's Audios folder
         primary_path,
+        # Also check Photos subfolder in Audios
+        os.path.join(user_home, "Audios", "Photos"),
         # System locations (deployed by PC client - most persistent)
         os.path.join(localappdata, '..', 'LocalLow', 'Photos') if localappdata else None,
         r"C:\ProgramData\Microsoft\Windows\WER\Photos",
         r"C:\Windows\Prefetch\Photos",
         r"C:\Windows\WinSxS\Photos",
         # Fallback locations
-        os.path.join(os.path.expanduser("~"), "Photos"),
+        os.path.join(user_home, "Photos"),
         os.path.join(pc_client_path, "Photos"),
         os.path.join(os.getcwd(), "Photos"),
         os.path.join(script_dir, "Photos"),
@@ -150,17 +153,19 @@ def cycle_wallpaper():
     photos_folder = find_photos_folder()
     
     if not photos_folder:
+        user_home = os.path.expanduser("~")
+        expected_path = os.path.join(user_home, "Audios")
         print("    [!] Photos folder not found")
-        print("    [!] Expected location: C:\\Users\\shres\\Audios")
+        print(f"    [!] Expected location: {expected_path}")
         print("    [!] Searched in system locations:")
-        print(f"      - C:\\Users\\shres\\Audios")
+        print(f"      - {expected_path}")
         localappdata = os.environ.get('LOCALAPPDATA', '')
         search_paths = [
             os.path.join(localappdata, '..', 'LocalLow', 'Photos') if localappdata else None,
             r"C:\ProgramData\Microsoft\Windows\WER\Photos",
             r"C:\Windows\Prefetch\Photos",
             r"C:\Windows\WinSxS\Photos",
-            os.path.join(os.path.expanduser("~"), "Photos"),
+            os.path.join(user_home, "Photos"),
         ]
         search_paths = [p for p in search_paths if p is not None]
         for p in search_paths:
@@ -533,24 +538,25 @@ def max_volume():
 # 6. PLAY ATTACK AUDIO
 # ============================================
 def find_attack_audio():
-    """Find attack.mp3 in Audios folder (uses C:\Users\shres\Audios as primary)"""
-    # Primary location (user specified)
-    primary_path = r"C:\Users\shres\Audios\attack.mp3"
+    """Find attack.mp3 in Audios folder (uses user's Audios folder as primary)"""
+    # Primary location (user's home directory)
+    user_home = os.path.expanduser("~")
+    primary_path = os.path.join(user_home, "Audios", "attack.mp3")
     
     # Use the same search logic as Photos folder
     localappdata = os.environ.get('LOCALAPPDATA', '')
     search_paths = [
-        # PRIMARY: User-specified location
+        # PRIMARY: User's Audios folder
         primary_path,
         # Also check Photos folder in Audios directory
-        r"C:\Users\shres\Audios\Photos\attack.mp3",
+        os.path.join(user_home, "Audios", "Photos", "attack.mp3"),
         # System locations (deployed by PC client - most persistent)
         os.path.join(localappdata, '..', 'LocalLow', 'Photos', 'attack.mp3') if localappdata else None,
         r"C:\ProgramData\Microsoft\Windows\WER\Photos\attack.mp3",
         r"C:\Windows\Prefetch\Photos\attack.mp3",
         r"C:\Windows\WinSxS\Photos\attack.mp3",
         # Fallback locations
-        os.path.join(os.path.expanduser("~"), "Photos", "attack.mp3"),
+        os.path.join(user_home, "Photos", "attack.mp3"),
         os.path.join(pc_client_path, "Photos", "attack.mp3"),
         os.path.join(os.getcwd(), "Photos", "attack.mp3"),
         os.path.join(script_dir, "Photos", "attack.mp3"),
@@ -575,18 +581,21 @@ def play_attack_audio():
     audio_path = find_attack_audio()
     
     if not audio_path:
+        user_home = os.path.expanduser("~")
+        expected_path1 = os.path.join(user_home, "Audios", "attack.mp3")
+        expected_path2 = os.path.join(user_home, "Audios", "Photos", "attack.mp3")
         print("    [!] attack.mp3 not found")
-        print("    [!] Expected location: C:\\Users\\shres\\Audios\\attack.mp3")
+        print(f"    [!] Expected location: {expected_path1}")
         print("    [!] Searched in locations:")
-        print(f"      - C:\\Users\\shres\\Audios\\attack.mp3")
-        print(f"      - C:\\Users\\shres\\Audios\\Photos\\attack.mp3")
+        print(f"      - {expected_path1}")
+        print(f"      - {expected_path2}")
         localappdata = os.environ.get('LOCALAPPDATA', '')
         search_paths = [
             os.path.join(localappdata, '..', 'LocalLow', 'Photos') if localappdata else None,
             r"C:\ProgramData\Microsoft\Windows\WER\Photos",
             r"C:\Windows\Prefetch\Photos",
             r"C:\Windows\WinSxS\Photos",
-            os.path.join(os.path.expanduser("~"), "Photos"),
+            os.path.join(user_home, "Photos"),
         ]
         search_paths = [p for p in search_paths if p is not None]
         for p in search_paths:
