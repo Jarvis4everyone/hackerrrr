@@ -117,32 +117,6 @@ export const broadcastScript = async (scriptName, serverUrl = null, scriptParams
   return response.data
 }
 
-// Streaming API
-export const startCameraStream = async (pcId) => {
-  const response = await api.post(`/api/streaming/${pcId}/camera/start`)
-  return response.data
-}
-
-export const startMicrophoneStream = async (pcId) => {
-  const response = await api.post(`/api/streaming/${pcId}/microphone/start`)
-  return response.data
-}
-
-export const startScreenStream = async (pcId) => {
-  const response = await api.post(`/api/streaming/${pcId}/screen/start`)
-  return response.data
-}
-
-export const stopStream = async (pcId) => {
-  const response = await api.post(`/api/streaming/${pcId}/stop`)
-  return response.data
-}
-
-export const getStreamStatus = async (pcId) => {
-  const response = await api.get(`/api/streaming/${pcId}/status`)
-  return response.data
-}
-
 // Executions API
 export const getExecutions = async (limit = 100) => {
   const response = await api.get('/api/executions', {

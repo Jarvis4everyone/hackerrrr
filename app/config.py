@@ -120,14 +120,6 @@ class Settings(BaseSettings):
     # Or via .env file using "Username" and "Password" (case-sensitive, with spaces around =)
     AUTH_USERNAME: str = os.getenv("AUTH_USERNAME", "admin")
     AUTH_PASSWORD: str = os.getenv("AUTH_PASSWORD", "admin")
-    
-    # WebRTC Configuration
-    # TURN server configuration (optional, for better NAT traversal in production)
-    # Format: turn:server:port?transport=udp or turn:server:port?transport=tcp
-    # If not provided, only STUN servers will be used
-    TURN_SERVER_URL: Optional[str] = os.getenv("TURN_SERVER_URL", None)
-    TURN_SERVER_USERNAME: Optional[str] = os.getenv("TURN_SERVER_USERNAME", None)
-    TURN_SERVER_PASSWORD: Optional[str] = os.getenv("TURN_SERVER_PASSWORD", None)
 
 
 settings = Settings()

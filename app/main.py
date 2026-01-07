@@ -22,11 +22,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Reduce verbosity of aioice (WebRTC ICE) logs - these are just informational
-logging.getLogger('aioice.ice').setLevel(logging.WARNING)
-
-# Suppress noisy aioice warnings about link-local addresses
-logging.getLogger('aioice.ice').setLevel(logging.WARNING)
 
 
 @asynccontextmanager
@@ -81,10 +76,6 @@ app.include_router(pcs.router)
 app.include_router(scripts.router)
 app.include_router(executions.router)
 
-# Import and include streaming router
-from app.routes import streaming
-app.include_router(streaming.router)
-
 # Import and include logs router
 from app.routes import logs
 app.include_router(logs.router)
@@ -103,13 +94,6 @@ app.include_router(terminal.router)
 async def websocket_endpoint(websocket: WebSocket, pc_id: str):
     """WebSocket endpoint for PC connections"""
     await handle_websocket_connection(websocket, pc_id)
-
-# WebSocket endpoint for frontend WebRTC signaling
-@app.websocket("/ws/frontend/{pc_id}/{stream_type}")
-async def frontend_websocket_endpoint(websocket: WebSocket, pc_id: str, stream_type: str):
-    """WebSocket endpoint for frontend WebRTC signaling"""
-    from app.websocket.frontend_handlers import handle_frontend_websocket
-    await handle_frontend_websocket(websocket, pc_id, stream_type)
 
 # WebSocket endpoint for frontend terminal sessions
 @app.websocket("/ws/terminal/{pc_id}/{session_id}")

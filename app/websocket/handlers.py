@@ -8,7 +8,6 @@ from app.websocket.connection_manager import manager
 from app.services.pc_service import PCService
 from app.services.execution_service import ExecutionService
 from app.services.log_service import LogService
-from app.services.webrtc_service import webrtc_service
 from app.services.file_service import FileService
 from app.services.terminal_service import terminal_service
 from app.websocket.terminal_handlers import forward_terminal_output
@@ -214,60 +213,6 @@ async def handle_websocket_connection(websocket: WebSocket, pc_id: str):
                             logger.info(f"[{pc_id}] Log stored (no execution_id): {log_entry.script_name}")
                     except Exception as e:
                         logger.error(f"Error saving log from {pc_id}: {e}")
-                
-                # WebRTC Signaling Messages
-                elif message_type == "webrtc_offer":
-                    # PC sends offer, server creates answer
-                    offer_sdp = data.get("sdp")
-                    if offer_sdp:
-                        # Define callback to send ICE candidates back to PC
-                        async def send_ice_candidate_to_pc(pc_id: str, candidate):
-                            """Send ICE candidate from server to PC client"""
-                            try:
-                                # Format candidate for sending
-                                candidate_data = {
-                                    "candidate": str(candidate.candidate) if hasattr(candidate, 'candidate') else str(candidate),
-                                    "sdpMLineIndex": getattr(candidate, 'sdpMLineIndex', None),
-                                    "sdpMid": getattr(candidate, 'sdpMid', None)
-                                }
-                                
-                                await websocket.send_json({
-                                    "type": "webrtc_ice_candidate",
-                                    "candidate": candidate_data
-                                })
-                                logger.debug(f"[WebRTC] Sent ICE candidate to {pc_id}")
-                            except Exception as e:
-                                logger.error(f"[WebRTC] Error sending ICE candidate to {pc_id}: {e}")
-                        
-                        answer_sdp = await webrtc_service.handle_offer(pc_id, offer_sdp, send_ice_candidate_to_pc)
-                        if answer_sdp:
-                            await websocket.send_json({
-                                "type": "webrtc_answer",
-                                "sdp": answer_sdp
-                            })
-                            logger.info(f"[WebRTC] Sent answer to {pc_id}")
-                        else:
-                            await websocket.send_json({
-                                "type": "webrtc_error",
-                                "message": "Failed to create answer"
-                            })
-                
-                elif message_type == "webrtc_answer":
-                    # PC sends answer (for server-initiated connections)
-                    answer_sdp = data.get("sdp")
-                    if answer_sdp:
-                        await webrtc_service.handle_answer(pc_id, answer_sdp)
-                
-                elif message_type == "webrtc_ice_candidate":
-                    # PC sends ICE candidate
-                    candidate = data.get("candidate")
-                    if candidate:
-                        await webrtc_service.handle_ice_candidate(pc_id, candidate)
-                
-                elif message_type == "webrtc_stream_ready":
-                    # PC confirms stream is ready
-                    stream_type = data.get("stream_type")
-                    logger.info(f"[WebRTC] {pc_id} stream ready: {stream_type}")
                 
                 elif message_type == "file_download_response":
                     # PC sends file download response

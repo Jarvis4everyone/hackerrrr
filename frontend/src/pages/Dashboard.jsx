@@ -5,12 +5,10 @@ import {
   Monitor, 
   FileCode, 
   Zap, 
-  Camera, 
-  Mic, 
-  MonitorSpeaker, 
   FileText,
   ArrowRight,
-  Terminal
+  Terminal,
+  Folder
 } from 'lucide-react'
 import { getHealth, getPCs, getScripts, getExecutions } from '../services/api'
 
@@ -94,28 +92,22 @@ const Dashboard = () => {
       description: 'Execute scripts on connected devices'
     },
     {
-      path: '/camera',
-      icon: Camera,
-      title: 'Camera',
-      description: 'Stream live camera feed from target PC'
-    },
-    {
-      path: '/microphone',
-      icon: Mic,
-      title: 'Microphone',
-      description: 'Listen to audio in 5-second chunks'
-    },
-    {
-      path: '/screen',
-      icon: MonitorSpeaker,
-      title: 'Screen',
-      description: 'View live screen share from target PC'
-    },
-    {
       path: '/logs',
       icon: FileText,
       title: 'Logs',
       description: 'View script execution logs and results'
+    },
+    {
+      path: '/directory',
+      icon: Folder,
+      title: 'Directory',
+      description: 'Browse and download files from PCs'
+    },
+    {
+      path: '/terminal',
+      icon: Terminal,
+      title: 'Terminal',
+      description: 'Remote terminal access to PCs'
     }
   ]
 

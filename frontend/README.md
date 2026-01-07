@@ -9,10 +9,9 @@ A modern, responsive hacking-themed control panel for the Remote Script Server.
 - 🖥️ **Dashboard**: Real-time statistics and system status
 - 💻 **PC Management**: View and manage connected PCs
 - 📜 **Scripts**: Send scripts to individual PCs or broadcast to all
-- 📹 **Camera Streaming**: WebRTC camera feed from PCs
-- 🎤 **Microphone Streaming**: Audio streaming with 5-second chunks
-- 🖼️ **Screen Share**: Remote desktop viewing via WebRTC
 - 📊 **Logs**: Execution history and filtering
+- 📁 **Directory**: Browse and download files from PCs
+- 💻 **Terminal**: Remote terminal access to PCs
 
 ## Installation
 
@@ -48,10 +47,9 @@ VITE_API_URL=http://localhost:8000
 - **Dashboard** (`/`): Overview with statistics
 - **PCs** (`/pcs`): Manage connected PCs
 - **Scripts** (`/scripts`): Send and manage scripts
-- **Camera** (`/camera`): View camera streams
-- **Microphone** (`/microphone`): Listen to microphone streams
-- **Screen** (`/screen`): View screen shares
 - **Logs** (`/logs`): Execution history
+- **Directory** (`/directory`): Browse and download files
+- **Terminal** (`/terminal`): Remote terminal access
 
 ## Tech Stack
 

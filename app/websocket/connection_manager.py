@@ -5,7 +5,6 @@ from typing import Dict, Optional
 from fastapi import WebSocket
 from app.services.pc_service import PCService
 from app.services.execution_service import ExecutionService
-from app.services.webrtc_service import webrtc_service
 from app.models.execution import ExecutionCreate
 import logging
 
@@ -50,9 +49,6 @@ class ConnectionManager:
         """Remove a WebSocket connection"""
         if pc_id in self.active_connections:
             del self.active_connections[pc_id]
-        
-        # Stop any active WebRTC streams
-        await webrtc_service.cleanup_connection(pc_id)
         
         # Update PC in database
         await PCService.update_connection_status(pc_id, connected=False)
