@@ -13,24 +13,66 @@ import tempfile
 import random
 
 # Import standardized path utilities
+# When scripts are executed by PC client, they might be in a temp location
+# So we need robust path resolution that works in all scenarios
+import os
+import sys
+
+def _get_base_path():
+    """Get base path (executable directory) - works in all execution contexts"""
+    # Priority 1: Check if running as executable (PyInstaller frozen)
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    
+    # Priority 2: Check PC_CLIENT_PATH environment variable (set by PC client)
+    pc_client_path = os.environ.get("PC_CLIENT_PATH", "")
+    if pc_client_path and os.path.exists(pc_client_path):
+        return os.path.abspath(pc_client_path)
+    
+    # Priority 3: Try to get from __file__ (when script is imported/executed normally)
+    try:
+        if '__file__' in globals():
+            script_path = os.path.abspath(__file__)
+            script_dir = os.path.dirname(script_path)
+            # If script is in Scripts folder, go up one level
+            if os.path.basename(script_dir) == 'Scripts':
+                return os.path.dirname(script_dir)
+            return script_dir
+    except (NameError, AttributeError):
+        pass
+    
+    # Priority 4: Try to get from sys.argv[0] (script being executed)
+    try:
+        if sys.argv and len(sys.argv) > 0:
+            script_path = os.path.abspath(sys.argv[0])
+            script_dir = os.path.dirname(script_path)
+            # If script is in Scripts folder, go up one level
+            if os.path.basename(script_dir) == 'Scripts':
+                return os.path.dirname(script_dir)
+            return script_dir
+    except (AttributeError, IndexError):
+        pass
+    
+    # Priority 5: Fallback to current working directory
+    return os.path.abspath(os.getcwd())
+
+# Try to import path_utils, but use inline functions as fallback
 try:
+    # Add script directory to path if needed
+    script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else os.path.dirname(os.path.abspath(sys.argv[0]))
+    if script_dir not in sys.path:
+        sys.path.insert(0, script_dir)
     from path_utils import get_photos_path, get_audios_path, find_folder, get_base_path
-except ImportError:
-    # Fallback if path_utils not available (shouldn't happen in normal execution)
-    import os
+except (ImportError, Exception):
+    # Fallback: use inline implementation
     def get_base_path():
-        if getattr(sys, 'frozen', False):
-            return os.path.dirname(sys.executable)
-        script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
-        if os.path.basename(script_dir) == 'Scripts':
-            return os.path.dirname(script_dir)
-        return script_dir
+        return _get_base_path()
     def get_photos_path():
-        return os.path.join(get_base_path(), "Photos")
+        return os.path.join(_get_base_path(), "Photos")
     def get_audios_path():
-        return os.path.join(get_base_path(), "Audios")
+        return os.path.join(_get_base_path(), "Audios")
     def find_folder(folder_name):
-        path = os.path.join(get_base_path(), folder_name)
+        path = os.path.join(_get_base_path(), folder_name)
         if os.path.exists(path) and os.path.isdir(path):
             return path
         return None

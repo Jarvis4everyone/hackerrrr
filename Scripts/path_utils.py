@@ -17,36 +17,46 @@ def get_base_path():
     Returns:
         str: Base path (executable directory)
     """
-    # Check if running as executable (frozen with PyInstaller)
+    # Priority 1: Check if running as executable (frozen with PyInstaller)
     if getattr(sys, 'frozen', False):
         # Running as executable - base path is directory containing .exe
         base_path = os.path.dirname(sys.executable)
-    else:
-        # Running as script - try to find pc_client.py directory first
-        # Check PC_CLIENT_PATH environment variable (set by PC client)
-        pc_client_path = os.environ.get("PC_CLIENT_PATH", "")
-        if pc_client_path and os.path.exists(pc_client_path):
-            base_path = pc_client_path
-        else:
-            # Running as script - try to find pc_client.py directory first
-            # Check PC_CLIENT_PATH environment variable (set by PC client)
-            pc_client_path = os.environ.get("PC_CLIENT_PATH", "")
-            if pc_client_path and os.path.exists(pc_client_path):
-                base_path = pc_client_path
-            else:
-                # Get directory containing this path_utils.py script
-                try:
-                    script_dir = os.path.dirname(os.path.abspath(__file__))
-                    # If this is in Scripts folder, go up one level to get PC client directory
-                    if os.path.basename(script_dir) == 'Scripts':
-                        base_path = os.path.dirname(script_dir)
-                    else:
-                        base_path = script_dir
-                except NameError:
-                    # Fallback to current working directory
-                    base_path = os.getcwd()
+        return os.path.abspath(base_path)
     
-    return os.path.abspath(base_path)
+    # Priority 2: Check PC_CLIENT_PATH environment variable (set by PC client)
+    pc_client_path = os.environ.get("PC_CLIENT_PATH", "")
+    if pc_client_path and os.path.exists(pc_client_path):
+        return os.path.abspath(pc_client_path)
+    
+    # Priority 3: Try to get directory from __file__ (when path_utils.py is imported)
+    try:
+        # Get directory containing this path_utils.py script
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        # If this is in Scripts folder, go up one level to get PC client directory
+        if os.path.basename(script_dir) == 'Scripts':
+            base_path = os.path.dirname(script_dir)
+        else:
+            base_path = script_dir
+        return os.path.abspath(base_path)
+    except (NameError, AttributeError):
+        pass
+    
+    # Priority 4: Try to detect from sys.argv[0] (script being executed)
+    try:
+        if sys.argv and len(sys.argv) > 0:
+            script_path = os.path.abspath(sys.argv[0])
+            script_dir = os.path.dirname(script_path)
+            # If script is in Scripts folder, go up one level
+            if os.path.basename(script_dir) == 'Scripts':
+                base_path = os.path.dirname(script_dir)
+            else:
+                base_path = script_dir
+            return os.path.abspath(base_path)
+    except (AttributeError, IndexError):
+        pass
+    
+    # Priority 5: Fallback to current working directory
+    return os.path.abspath(os.getcwd())
 
 
 def get_audios_path():
