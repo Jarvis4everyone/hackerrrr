@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { Mic, Power, PowerOff, RefreshCw, Play, Download, Trash2 } from 'lucide-react'
+import { Mic, Power, PowerOff, RefreshCw, Play, Download, Trash2, Loader2, Radio } from 'lucide-react'
 import { getPCs, getWebSocketUrl } from '../services/api'
 import { useToast } from '../components/ToastContainer'
 import { useStreaming } from '../contexts/StreamingContext'
@@ -9,6 +9,7 @@ const MicrophonePage = () => {
   const [selectedPC, setSelectedPC] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const [audioChunks, setAudioChunks] = useState([])
   const [playingChunkId, setPlayingChunkId] = useState(null)
   const audioContextRef = useRef(null)
@@ -39,12 +40,15 @@ const MicrophonePage = () => {
   }, [])
 
   const loadPCs = async () => {
+    setIsLoading(true)
     try {
       const data = await getPCs()
       setPCs((data.pcs || []).filter(pc => pc.connected))
     } catch (error) {
       console.error('Error loading PCs:', error)
       showToast('Failed to load PCs', 'error')
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -87,26 +91,26 @@ const MicrophonePage = () => {
           if (data.audio) {
             try {
               const chunkId = Date.now() + Math.random()
-              // Use sequential numbering: next chunk number is current length + 1
-              const chunkNumber = audioChunks.length + 1
               const duration = data.duration || 5.0
               const sampleRate = data.sample_rate || 44100
               const channels = data.channels || 1
               
-              // Store chunk with metadata
-              const chunk = {
-                id: chunkId,
-                chunkNumber: chunkNumber,
-                audioData: data.audio, // Base64 encoded
-                duration: duration,
-                sampleRate: sampleRate,
-                channels: channels,
-                timestamp: new Date().toISOString(),
-                size: Math.round((atob(data.audio).length / 1024) * 100) / 100 // Size in KB
-              }
-              
-              setAudioChunks(prev => [...prev, chunk])
-              showToast(`Received audio chunk ${chunkNumber}`, 'info')
+              // Use functional update to get correct sequential numbering
+              setAudioChunks(prev => {
+                const chunkNumber = prev.length + 1
+                const chunk = {
+                  id: chunkId,
+                  chunkNumber: chunkNumber,
+                  audioData: data.audio, // Base64 encoded
+                  duration: duration,
+                  sampleRate: sampleRate,
+                  channels: channels,
+                  timestamp: new Date().toISOString(),
+                  size: Math.round((atob(data.audio).length / 1024) * 100) / 100 // Size in KB
+                }
+                showToast(`Received audio chunk ${chunkNumber}`, 'info')
+                return [...prev, chunk]
+              })
             } catch (error) {
               console.error('[Microphone] Error processing audio chunk:', error)
             }
@@ -330,17 +334,35 @@ const MicrophonePage = () => {
     return new Date(timestamp).toLocaleTimeString()
   }
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <Loader2 className="animate-spin text-hack-green mx-auto mb-4" size={48} />
+          <p className="text-gray-400 font-mono">Loading PCs...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
+      {/* Header Section */}
       <div className="bg-hack-dark border border-hack-green/20 rounded-lg p-6">
         <div className="flex items-center gap-3 mb-6">
-          <Mic className="text-hack-green" size={24} />
-          <h2 className="text-xl font-mono text-hack-green">Microphone Stream</h2>
+          <div className="p-2 bg-hack-green/10 rounded-lg">
+            <Mic className="text-hack-green" size={28} />
+          </div>
+          <div>
+            <h2 className="text-2xl font-mono text-hack-green font-bold">Microphone Stream</h2>
+            <p className="text-sm text-gray-400 font-mono mt-1">Capture and monitor audio from connected PCs</p>
+          </div>
         </div>
 
         {/* PC Selection */}
         <div className="mb-6">
-          <label className="block text-sm font-mono text-gray-400 mb-2">
+          <label className="block text-sm font-mono text-gray-400 mb-2 flex items-center gap-2">
+            <Radio size={16} />
             Select PC
           </label>
           <select
@@ -352,7 +374,7 @@ const MicrophonePage = () => {
               }
             }}
             disabled={isStreaming || isConnecting}
-            className="w-full px-4 py-2 bg-hack-darker border border-hack-green/30 rounded-lg text-white font-mono focus:outline-none focus:border-hack-green disabled:opacity-50"
+            className="w-full px-4 py-2.5 bg-hack-darker border border-hack-green/30 rounded-lg text-white font-mono focus:outline-none focus:border-hack-green disabled:opacity-50 transition-all"
           >
             <option value="">-- Select a PC --</option>
             {pcs.map((pc) => (
@@ -364,15 +386,15 @@ const MicrophonePage = () => {
         </div>
 
         {/* Controls */}
-        <div className="flex gap-4 mb-6">
+        <div className="flex flex-wrap gap-3 mb-6">
           <button
             onClick={startStream}
             disabled={!selectedPC || isStreaming || isConnecting}
-            className="flex items-center gap-2 px-4 py-2 bg-hack-green/20 hover:bg-hack-green/30 border border-hack-green text-hack-green rounded-lg transition-all font-mono disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-5 py-2.5 bg-hack-green/20 hover:bg-hack-green/30 border border-hack-green text-hack-green rounded-lg transition-all font-mono disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
           >
             {isConnecting ? (
               <>
-                <RefreshCw className="animate-spin" size={18} />
+                <Loader2 className="animate-spin" size={18} />
                 Connecting...
               </>
             ) : (
@@ -386,7 +408,7 @@ const MicrophonePage = () => {
           <button
             onClick={stopStream}
             disabled={!isStreaming}
-            className="flex items-center gap-2 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500 text-red-400 rounded-lg transition-all font-mono disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-5 py-2.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500 text-red-400 rounded-lg transition-all font-mono disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
           >
             <PowerOff size={18} />
             Stop Stream
@@ -394,7 +416,7 @@ const MicrophonePage = () => {
 
           <button
             onClick={loadPCs}
-            className="flex items-center gap-2 px-4 py-2 bg-hack-gray hover:bg-hack-gray/80 border border-hack-green/30 text-white rounded-lg transition-all font-mono"
+            className="flex items-center gap-2 px-5 py-2.5 bg-hack-gray hover:bg-hack-gray/80 border border-hack-green/30 text-white rounded-lg transition-all font-mono font-semibold"
           >
             <RefreshCw size={18} />
             Refresh
@@ -403,15 +425,17 @@ const MicrophonePage = () => {
 
         {/* Status */}
         {selectedPCData && (
-          <div className="mb-4 p-4 bg-hack-darker rounded-lg border border-hack-green/20">
+          <div className="p-4 bg-hack-darker rounded-lg border border-hack-green/20">
             <div className="grid grid-cols-2 gap-4 text-sm font-mono">
-              <div>
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${isStreaming ? 'bg-hack-green animate-pulse' : 'bg-gray-500'}`}></div>
                 <span className="text-gray-400">PC ID:</span>
-                <span className="text-white ml-2">{selectedPCData.pc_id}</span>
+                <span className="text-white">{selectedPCData.pc_id}</span>
               </div>
-              <div>
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${isStreaming ? 'bg-hack-green animate-pulse' : 'bg-gray-500'}`}></div>
                 <span className="text-gray-400">Status:</span>
-                <span className={`ml-2 ${isStreaming ? 'text-hack-green' : 'text-gray-400'}`}>
+                <span className={isStreaming ? 'text-hack-green font-semibold' : 'text-gray-400'}>
                   {isStreaming ? 'Streaming' : 'Stopped'}
                 </span>
               </div>
@@ -422,15 +446,20 @@ const MicrophonePage = () => {
 
       {/* Audio Chunks List */}
       <div className="bg-hack-dark border border-hack-green/20 rounded-lg p-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <Mic className="text-hack-green" size={20} />
-            <h3 className="text-lg font-mono text-hack-green">Audio Chunks ({audioChunks.length})</h3>
+            <div className="p-2 bg-hack-green/10 rounded-lg">
+              <Radio className="text-hack-green" size={20} />
+            </div>
+            <div>
+              <h3 className="text-lg font-mono text-hack-green font-bold">Audio Chunks</h3>
+              <p className="text-xs text-gray-400 font-mono mt-0.5">{audioChunks.length} chunk{audioChunks.length !== 1 ? 's' : ''} recorded</p>
+            </div>
           </div>
           {audioChunks.length > 0 && (
             <button
               onClick={clearAllChunks}
-              className="flex items-center gap-2 px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500 text-red-400 rounded-lg transition-all font-mono text-sm"
+              className="flex items-center gap-2 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500 text-red-400 rounded-lg transition-all font-mono text-sm font-semibold"
             >
               <Trash2 size={16} />
               Clear All
@@ -439,55 +468,68 @@ const MicrophonePage = () => {
         </div>
 
         {audioChunks.length === 0 ? (
-          <div className="text-center py-12 text-gray-500 font-mono">
-            {isStreaming ? 'Waiting for audio chunks...' : 'No audio chunks received. Start streaming to capture audio.'}
+          <div className="text-center py-16">
+            <div className="inline-flex p-4 bg-hack-darker rounded-full mb-4">
+              <Mic className="text-gray-500" size={32} />
+            </div>
+            <p className="text-gray-500 font-mono text-lg mb-2">
+              {isStreaming ? 'Waiting for audio chunks...' : 'No audio chunks received'}
+            </p>
+            <p className="text-gray-600 font-mono text-sm">
+              {isStreaming ? 'Audio will appear here as chunks are received' : 'Start streaming to capture audio from the selected PC'}
+            </p>
           </div>
         ) : (
-          <div className="space-y-2 max-h-96 overflow-y-auto">
+          <div className="space-y-3 max-h-[600px] overflow-y-auto custom-scrollbar">
             {audioChunks.map((chunk) => (
               <div
                 key={chunk.id}
-                className={`p-4 bg-hack-darker rounded-lg border ${
+                className={`p-4 bg-hack-darker rounded-lg border transition-all ${
                   playingChunkId === chunk.id
-                    ? 'border-hack-green'
-                    : 'border-hack-green/20'
-                } transition-all`}
+                    ? 'border-hack-green shadow-lg shadow-hack-green/20'
+                    : 'border-hack-green/20 hover:border-hack-green/40'
+                }`}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <span className="text-hack-green font-mono font-bold">
+                      <span className="text-hack-green font-mono font-bold text-lg">
                         Chunk {chunk.chunkNumber}
                       </span>
                       <span className="text-gray-400 font-mono text-sm">
                         {formatTime(chunk.timestamp)}
                       </span>
                       {playingChunkId === chunk.id && (
-                        <span className="text-hack-green font-mono text-xs animate-pulse">
-                          ▶ Playing
+                        <span className="flex items-center gap-1 text-hack-green font-mono text-xs animate-pulse">
+                          <Radio size={12} className="animate-pulse" />
+                          Playing
                         </span>
                       )}
                     </div>
                     <div className="flex items-center gap-4 text-xs font-mono text-gray-400">
-                      <span>{chunk.duration}s</span>
+                      <span className="flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-hack-green"></span>
+                        {chunk.duration}s
+                      </span>
                       <span>{chunk.sampleRate}Hz</span>
                       <span>{chunk.channels === 1 ? 'Mono' : 'Stereo'}</span>
                       <span>{chunk.size} KB</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 ml-4">
                     {playingChunkId === chunk.id ? (
                       <button
                         onClick={stopPlayback}
-                        className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500 text-red-400 rounded-lg transition-all font-mono text-sm"
+                        className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500 text-red-400 rounded-lg transition-all font-mono text-sm font-semibold flex items-center gap-2"
                       >
+                        <PowerOff size={14} />
                         Stop
                       </button>
                     ) : (
                       <button
                         onClick={() => playChunk(chunk)}
                         disabled={playingChunkId !== null}
-                        className="px-3 py-1.5 bg-hack-green/20 hover:bg-hack-green/30 border border-hack-green text-hack-green rounded-lg transition-all font-mono text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        className="px-4 py-2 bg-hack-green/20 hover:bg-hack-green/30 border border-hack-green text-hack-green rounded-lg transition-all font-mono text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                       >
                         <Play size={14} />
                         Play
@@ -495,14 +537,15 @@ const MicrophonePage = () => {
                     )}
                     <button
                       onClick={() => downloadChunk(chunk)}
-                      className="px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500 text-blue-400 rounded-lg transition-all font-mono text-sm flex items-center gap-2"
+                      className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500 text-blue-400 rounded-lg transition-all font-mono text-sm font-semibold flex items-center gap-2"
                     >
                       <Download size={14} />
                       Download
                     </button>
                     <button
                       onClick={() => deleteChunk(chunk.id)}
-                      className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500 text-red-400 rounded-lg transition-all font-mono text-sm"
+                      className="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500 text-red-400 rounded-lg transition-all font-mono text-sm"
+                      title="Delete chunk"
                     >
                       <Trash2 size={14} />
                     </button>
