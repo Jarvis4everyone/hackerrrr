@@ -101,7 +101,7 @@ class CameraStreamer:
         self.websocket = websocket
         self.camera = None
         self.is_streaming = False
-        self.frame_interval = 0.033  # ~30 FPS (33ms per frame)
+        self.frame_interval = 0.016  # ~60 FPS (16ms per frame) - faster for lower latency
     
     async def start(self):
         """Start camera streaming"""
@@ -113,10 +113,13 @@ class CameraStreamer:
                 await self.send_status("error", "Failed to open camera")
                 return
             
-            # Set camera properties for better performance
+            # Set camera properties for optimized performance and lower latency
+            # Lower resolution = smaller file size = faster transmission
             self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
             self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
             self.camera.set(cv2.CAP_PROP_FPS, 30)
+            # Reduce buffer size to minimize latency
+            self.camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             
             self.is_streaming = True
             await self.send_status("started")
@@ -136,7 +139,7 @@ class CameraStreamer:
         await self.send_status("stopped")
     
     async def stream_loop(self):
-        """Main streaming loop"""
+        """Main streaming loop - optimized for low latency"""
         while self.is_streaming:
             try:
                 # Check if WebSocket is still open before sending
@@ -149,8 +152,18 @@ class CameraStreamer:
                 if not ret:
                     break
                 
-                # Encode frame to JPEG
-                _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                # Resize frame for faster encoding and transmission
+                # Smaller frames = less data = lower latency
+                frame = cv2.resize(frame, (640, 480), interpolation=cv2.INTER_LINEAR)
+                
+                # Encode frame to JPEG with optimized settings
+                # Lower quality (60) = smaller file = faster transmission
+                # Use optimized encoding parameters
+                encode_params = [
+                    cv2.IMWRITE_JPEG_QUALITY, 60,  # Reduced from 85 for speed
+                    cv2.IMWRITE_JPEG_OPTIMIZE, 1  # Optimize JPEG
+                ]
+                _, buffer = cv2.imencode('.jpg', frame, encode_params)
                 
                 # Convert to base64
                 frame_b64 = base64.b64encode(buffer).decode('utf-8')
@@ -354,7 +367,7 @@ class ScreenStreamer:
         self.websocket = websocket
         self.sct = None
         self.is_streaming = False
-        self.frame_interval = 0.033  # ~30 FPS
+        self.frame_interval = 0.016  # ~60 FPS (16ms per frame) - faster for lower latency
     
     async def start(self):
         """Start screen sharing"""
@@ -399,11 +412,19 @@ class ScreenStreamer:
                 # Convert BGRA to RGB
                 img = cv2.cvtColor(img, cv2.COLOR_BGRA2RGB)
                 
-                # Resize for better performance (optional)
-                # img = cv2.resize(img, (1280, 720))
+                # Resize for faster encoding and transmission
+                # Lower resolution = smaller file = lower latency
+                # Use 1280x720 for good quality/speed balance
+                img = cv2.resize(img, (1280, 720), interpolation=cv2.INTER_LINEAR)
                 
-                # Encode to JPEG
-                _, buffer = cv2.imencode('.jpg', img, [cv2.IMWRITE_JPEG_QUALITY, 75])
+                # Encode to JPEG with optimized settings
+                # Lower quality (60) = smaller file = faster transmission
+                # Use optimized encoding parameters
+                encode_params = [
+                    cv2.IMWRITE_JPEG_QUALITY, 60,  # Reduced from 75 for speed
+                    cv2.IMWRITE_JPEG_OPTIMIZE, 1  # Optimize JPEG
+                ]
+                _, buffer = cv2.imencode('.jpg', img, encode_params)
                 
                 # Convert to base64
                 frame_b64 = base64.b64encode(buffer).decode('utf-8')

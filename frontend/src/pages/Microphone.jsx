@@ -87,7 +87,8 @@ const MicrophonePage = () => {
           if (data.audio) {
             try {
               const chunkId = Date.now() + Math.random()
-              const chunkNumber = data.chunk_number || audioChunks.length + 1
+              // Use sequential numbering: next chunk number is current length + 1
+              const chunkNumber = audioChunks.length + 1
               const duration = data.duration || 5.0
               const sampleRate = data.sample_rate || 44100
               const channels = data.channels || 1
