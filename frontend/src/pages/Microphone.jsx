@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { Mic, Power, PowerOff, RefreshCw, Play, Download, Trash2, Loader2, Radio, Waveform, Clock, HardDrive } from 'lucide-react'
+import { Mic, Power, PowerOff, RefreshCw, Play, Download, Trash2, Loader2, Radio, Activity, Clock, HardDrive } from 'lucide-react'
 import { getPCs, getWebSocketUrl } from '../services/api'
 import { useToast } from '../components/ToastContainer'
 import { useStreaming } from '../contexts/StreamingContext'
@@ -476,7 +476,7 @@ const MicrophonePage = () => {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
             <div className="p-2.5 bg-hack-green/10 rounded-lg border border-hack-green/30">
-              <Waveform className="text-hack-green" size={24} />
+              <Activity className="text-hack-green" size={24} />
             </div>
             <div>
               <h3 className="text-xl font-mono text-hack-green font-bold">Audio Chunks</h3>
@@ -544,7 +544,7 @@ const MicrophonePage = () => {
                         <span>{chunk.duration}s</span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <Waveform size={12} />
+                        <Activity size={12} />
                         <span>{chunk.sampleRate}Hz</span>
                       </div>
                       <div className="flex items-center gap-1.5">
