@@ -35,8 +35,9 @@ const MicrophonePage = () => {
   const loadPCs = async () => {
     try {
       const data = await getPCs()
-      setPCs(data.filter(pc => pc.connected))
+      setPCs((data.pcs || []).filter(pc => pc.connected))
     } catch (error) {
+      console.error('Error loading PCs:', error)
       showToast('Failed to load PCs', 'error')
     }
   }

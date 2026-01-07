@@ -34,10 +34,10 @@ function App() {
                         <Route path="/scripts" element={<Scripts />} />
                         <Route path="/directory" element={<Directory />} />
                         <Route path="/terminal" element={<Terminal />} />
-                        <Route path="/logs" element={<Logs />} />
                         <Route path="/camera" element={<Camera />} />
                         <Route path="/microphone" element={<Microphone />} />
                         <Route path="/screen" element={<Screen />} />
+                        <Route path="/logs" element={<Logs />} />
                         <Route path="*" element={<Navigate to="/" replace />} />
                       </Routes>
                     </Layout>
