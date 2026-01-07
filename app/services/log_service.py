@@ -30,17 +30,14 @@ class LogService:
             existing_log = await db.logs.find_one({"execution_id": log.execution_id})
         
         if existing_log:
-            # Update existing log: append content, update level, file path, and timestamp
-            existing_content = existing_log.get("log_content", "")
+            # Update existing log: REPLACE content (PC sends complete log file, not chunks)
+            # The PC client sends ONE message with the complete log file content
+            # So we REPLACE the existing content, not append
             new_content = log.log_content
             
-            # Append new content with newline separator if both exist
-            if existing_content and new_content:
-                combined_content = f"{existing_content}\n{new_content}"
-            elif existing_content:
-                combined_content = existing_content
-            else:
-                combined_content = new_content
+            # Use new content (complete log file from PC)
+            # If PC sends complete log file, it should replace any partial logs
+            combined_content = new_content
             
             # Determine log level priority (SUCCESS > ERROR > WARNING > INFO > DEBUG)
             level_priority = {"SUCCESS": 5, "ERROR": 4, "WARNING": 3, "INFO": 2, "DEBUG": 1}
