@@ -353,11 +353,13 @@ const Logs = () => {
                   </div>
 
                   {/* Log Content */}
-                  <div className="bg-black/30 border border-gray-700 rounded-lg p-3 sm:p-4">
-                    <pre className="text-gray-200 whitespace-pre-wrap break-words text-xs sm:text-sm font-mono leading-relaxed overflow-x-auto">
-                      {log.log_content || 'No content'}
-                    </pre>
-                  </div>
+                  {log.log_content && (
+                    <div className="bg-black/40 border border-gray-700 rounded-lg p-3 sm:p-4">
+                      <pre className="text-white whitespace-pre-wrap break-words text-sm sm:text-base font-mono leading-relaxed overflow-x-auto max-h-[500px] overflow-y-auto">
+                        {log.log_content}
+                      </pre>
+                    </div>
+                  )}
 
                   {/* Log File Path */}
                   {log.log_file_path && (
