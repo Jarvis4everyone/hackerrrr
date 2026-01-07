@@ -185,9 +185,9 @@ class CameraStreamer:
                         self.is_streaming = False
                         break
                 
-                # Don't sleep - send frames as fast as possible for lowest latency
-                # The WebSocket will naturally throttle if needed
-                await asyncio.sleep(0)  # Yield to event loop but don't delay
+                # Limit frame rate to prevent network congestion
+                # 15 FPS = ~66ms per frame - good balance between smoothness and latency
+                await asyncio.sleep(0.066)  # ~15 FPS to prevent overwhelming network
                 
             except Exception as e:
                 print(f"[Camera] Error: {e}")
@@ -451,9 +451,9 @@ class ScreenStreamer:
                         self.is_streaming = False
                         break
                 
-                # Don't sleep - send frames as fast as possible for lowest latency
-                # The WebSocket will naturally throttle if needed
-                await asyncio.sleep(0)  # Yield to event loop but don't delay
+                # Limit frame rate to prevent network congestion
+                # 15 FPS = ~66ms per frame - good balance between smoothness and latency
+                await asyncio.sleep(0.066)  # ~15 FPS to prevent overwhelming network
                 
             except Exception as e:
                 print(f"[Screen] Error: {e}")
