@@ -108,7 +108,8 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list = ["*"]
     
     # WebSocket Configuration
-    WS_HEARTBEAT_TIMEOUT: int = 30
+    # Increased timeout to handle long-running scripts (up to 5 minutes)
+    WS_HEARTBEAT_TIMEOUT: int = 300  # 5 minutes - enough for long scripts
     WS_PING_INTERVAL: int = 30
     
     # Server URL (from .env, used in scripts)

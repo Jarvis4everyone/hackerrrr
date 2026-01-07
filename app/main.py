@@ -35,8 +35,9 @@ async def cleanup_stale_connections():
         try:
             await asyncio.sleep(60)  # Check every 60 seconds
             
-            # Mark PCs as offline if they haven't sent a heartbeat in 90 seconds
-            cutoff_time = datetime.utcnow() - timedelta(seconds=90)
+            # Mark PCs as offline if they haven't sent a heartbeat in 5 minutes
+            # Increased from 90 seconds to handle long-running scripts
+            cutoff_time = datetime.utcnow() - timedelta(seconds=300)  # 5 minutes
             
             # Get all PCs marked as connected in DB
             from app.database import get_database
