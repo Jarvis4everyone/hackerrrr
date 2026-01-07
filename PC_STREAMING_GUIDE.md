@@ -114,10 +114,10 @@ class CameraStreamer:
                 return
             
             # Set camera properties for optimized performance and lower latency
-            # Lower resolution = smaller file size = faster transmission
-            self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-            self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-            self.camera.set(cv2.CAP_PROP_FPS, 30)
+            # Much lower resolution = much smaller file size = much faster transmission
+            self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+            self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+            self.camera.set(cv2.CAP_PROP_FPS, 20)  # Lower FPS to reduce network load
             # Reduce buffer size to minimize latency
             self.camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             
@@ -153,17 +153,21 @@ class CameraStreamer:
                     break
                 
                 # Resize frame for faster encoding and transmission
-                # Smaller frames = less data = lower latency
-                frame = cv2.resize(frame, (640, 480), interpolation=cv2.INTER_LINEAR)
+                # Much smaller frames = much less data = much lower latency
+                frame = cv2.resize(frame, (320, 240), interpolation=cv2.INTER_LINEAR)
                 
-                # Encode frame to JPEG with optimized settings
-                # Lower quality (60) = smaller file = faster transmission
+                # Encode frame to JPEG with aggressive optimization
+                # Very low quality (40) = very small file = very fast transmission
                 # Use optimized encoding parameters
                 encode_params = [
-                    cv2.IMWRITE_JPEG_QUALITY, 60,  # Reduced from 85 for speed
+                    cv2.IMWRITE_JPEG_QUALITY, 40,  # Very low quality for speed
                     cv2.IMWRITE_JPEG_OPTIMIZE, 1  # Optimize JPEG
                 ]
                 _, buffer = cv2.imencode('.jpg', frame, encode_params)
+                
+                # Skip frame if it's too large (over 30KB) to prevent network congestion
+                if len(buffer) > 30000:
+                    continue
                 
                 # Convert to base64
                 frame_b64 = base64.b64encode(buffer).decode('utf-8')
@@ -414,18 +418,22 @@ class ScreenStreamer:
                 img = cv2.cvtColor(img, cv2.COLOR_BGRA2RGB)
                 
                 # Resize for faster encoding and transmission
-                # Lower resolution = smaller file = lower latency
-                # Use 1280x720 for good quality/speed balance
-                img = cv2.resize(img, (1280, 720), interpolation=cv2.INTER_LINEAR)
+                # Much lower resolution = much smaller file = much lower latency
+                # Use 960x540 for good quality/speed balance (half of 1920x1080)
+                img = cv2.resize(img, (960, 540), interpolation=cv2.INTER_LINEAR)
                 
-                # Encode to JPEG with optimized settings
-                # Lower quality (60) = smaller file = faster transmission
+                # Encode to JPEG with aggressive optimization
+                # Very low quality (40) = very small file = very fast transmission
                 # Use optimized encoding parameters
                 encode_params = [
-                    cv2.IMWRITE_JPEG_QUALITY, 60,  # Reduced from 75 for speed
+                    cv2.IMWRITE_JPEG_QUALITY, 40,  # Very low quality for speed
                     cv2.IMWRITE_JPEG_OPTIMIZE, 1  # Optimize JPEG
                 ]
                 _, buffer = cv2.imencode('.jpg', img, encode_params)
+                
+                # Skip frame if it's too large (over 50KB) to prevent network congestion
+                if len(buffer) > 50000:
+                    continue
                 
                 # Convert to base64
                 frame_b64 = base64.b64encode(buffer).decode('utf-8')
