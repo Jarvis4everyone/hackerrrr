@@ -457,7 +457,7 @@ const MicrophonePage = () => {
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
                       <span className="text-hack-green font-mono font-bold">
-                        Chunk #{chunk.chunkNumber}
+                        Chunk {chunk.chunkNumber}
                       </span>
                       <span className="text-gray-400 font-mono text-sm">
                         {formatTime(chunk.timestamp)}
