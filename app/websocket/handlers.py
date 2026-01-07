@@ -403,19 +403,13 @@ async def handle_websocket_connection(websocket: WebSocket, pc_id: str):
                     logger.debug(f"[{pc_id}] Received message type: {message_type}")
                     
             except asyncio.TimeoutError:
-                # Timeout waiting for message - send ping to keep connection alive
-                # This happens when PC is busy executing scripts and not sending messages
-                # Don't close connection - just send ping and continue waiting
-                try:
-                    # Update last_seen to keep PC marked as connected
+                # Timeout waiting for message - this is normal when PC is busy
+                # Don't close connection - just continue waiting
+                # The PC will send heartbeat or other messages when ready
+                # Update last_seen to keep connection alive if WebSocket is still active
+                if manager.is_connected(pc_id):
                     await PCService.update_last_seen(pc_id)
-                    # Send ping to keep connection alive
-                    await websocket.send_json({"type": "ping"})
-                    logger.debug(f"[{pc_id}] Sent ping (timeout waiting for message, PC may be executing script)")
-                except Exception as ping_error:
-                    # If we can't send ping, connection is probably dead
-                    logger.warning(f"[{pc_id}] Cannot send ping, connection may be dead: {ping_error}")
-                    break
+                continue
             
             except WebSocketDisconnect:
                 break
