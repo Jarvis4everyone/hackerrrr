@@ -140,7 +140,7 @@ class CameraStreamer:
         self.websocket = websocket
         self.camera = None
         self.is_streaming = False
-        self.frame_interval = 0.016  # ~60 FPS (16ms per frame) - faster for lower latency
+        self.frame_interval = 1.0  # 1 FPS (1 second per frame) - high quality, clear images
     
     async def start(self):
         """Start camera streaming"""
@@ -407,7 +407,7 @@ class ScreenStreamer:
         self.websocket = websocket
         self.sct = None
         self.is_streaming = False
-        self.frame_interval = 0.016  # ~60 FPS (16ms per frame) - faster for lower latency
+        self.frame_interval = 1.0  # 1 FPS (1 second per frame) - high quality, clear images
     
     async def start(self):
         """Start screen sharing"""
