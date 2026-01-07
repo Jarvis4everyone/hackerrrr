@@ -1,8 +1,62 @@
-# Server-Side Issue: Log Messages Not Being Received
+# Server-Side Issue: Complete Log File Content Not Being Saved
 
 ## Problem Description
 
-The PC client is successfully sending log messages to the server, but the server is not receiving or processing them. The PC client console shows successful transmission, but logs are not appearing on the server side.
+The PC client is successfully sending log messages to the server, but **the server is only saving the FIRST log message, not the complete log file content**.
+
+**Evidence:**
+- PC client sends multiple log messages (initial log, chunked logs during execution, complete log file at end)
+- Server only saves the first log message: `"[*] Executing script: connected_devices.py"`
+- Complete log file (133 lines, ~4000+ characters) is NOT being saved
+- MongoDB document shows only the first log entry with minimal content
+
+**Example MongoDB Document (WRONG - only first log):**
+```json
+{
+  "_id": {"$oid": "695e555b8e46bf7a69f2c829"},
+  "pc_id": "ShreshthKaushik",
+  "script_name": "connected_devices.py",
+  "execution_id": "695e555b8e46bf7a69f2c828",
+  "log_file_path": "c:\\Users\\shres\\Desktop\\Hacking\\PC\\logs\\connected_devices_20260107_181515_695e555b.log",
+  "log_content": "[*] Executing script: connected_devices.py",  // ❌ ONLY FIRST LINE!
+  "log_level": "INFO",
+  "timestamp": {"$date": "2026-01-07T12:45:15.912Z"}
+}
+```
+
+**Expected:** Server should save MULTIPLE log entries for the same execution_id, including the complete log file content (all 133 lines).
+
+## Quick Fix Summary
+
+**THE PROBLEM:** Server is using `findOneAndUpdate` or `upsert: true` which **overwrites** the first log entry instead of creating new entries.
+
+**THE SOLUTION:** Change from `findOneAndUpdate` to `create()` or `insertOne()` to create a NEW document for EACH log message.
+
+**Before (WRONG):**
+```javascript
+await LogModel.findOneAndUpdate(
+    { execution_id: message.execution_id },
+    { log_content: message.log_content },
+    { upsert: true }  // ❌ This overwrites!
+);
+```
+
+**After (CORRECT):**
+```javascript
+await LogModel.create({
+    pc_id: pcId,
+    script_name: message.script_name,
+    execution_id: message.execution_id,
+    log_content: message.log_content,  // ✅ Creates new entry
+    log_level: message.log_level,
+    log_file_path: message.log_file_path,
+    timestamp: new Date()
+});
+```
+
+**Also Check:**
+- Remove any unique index on `execution_id` in the logs collection
+- Ensure the server processes ALL log messages, not just the first one
 
 ## Evidence from PC Client
 
@@ -79,34 +133,68 @@ The PC client sends logs at multiple points:
 4. **Complete log file** - After execution, sends the ENTIRE log file content as a single log message
 5. **Execution complete** - Final message with execution status
 
+## Root Cause Analysis
+
+The server is likely:
+1. **Overwriting logs** - Only saving the first log message per execution_id instead of creating multiple log entries
+2. **Not processing all messages** - Only processing the first `type: "log"` message and ignoring subsequent ones
+3. **Database constraint** - Might have a unique constraint on execution_id that prevents multiple log entries
+
 ## What to Check on Server Side
 
 ### 1. WebSocket Message Handler
 
 Verify that the server's WebSocket message handler is:
-- ✅ Receiving messages with `type: "log"`
+- ✅ Receiving **ALL** messages with `type: "log"` (not just the first one)
 - ✅ Receiving messages with `type: "execution_complete"`
 - ✅ Properly parsing the JSON message
 - ✅ Extracting all required fields (script_name, execution_id, log_content, log_level)
+- ✅ **NOT stopping after the first log message**
 
-### 2. Log Storage
+### 2. Log Storage (CRITICAL FIX NEEDED)
 
-Ensure the server is:
-- ✅ Storing log messages in MongoDB (or your database)
-- ✅ Associating logs with the correct `execution_id`
-- ✅ Storing the `log_content` field (this contains the actual log text)
-- ✅ Storing the `log_level` field
-- ✅ Storing the `log_file_path` field (optional but useful)
+**THE PROBLEM:** Server is only saving ONE log entry per execution_id.
+
+**THE FIX:** Server must save **MULTIPLE log entries** for the same execution_id. Each log message should create a **NEW document** in MongoDB, not overwrite the previous one.
+
+**Current (WRONG) Behavior:**
+```javascript
+// Server might be doing this (WRONG):
+await LogModel.findOneAndUpdate(
+    { execution_id: message.execution_id },
+    { log_content: message.log_content },  // ❌ Overwrites!
+    { upsert: true }
+);
+```
+
+**Correct Behavior:**
+```javascript
+// Server should do this (CORRECT):
+await LogModel.create({
+    pc_id: pcId,
+    script_name: message.script_name,
+    execution_id: message.execution_id,
+    log_content: message.log_content,  // ✅ Creates new entry
+    log_level: message.log_level,
+    log_file_path: message.log_file_path,
+    timestamp: new Date()
+});
+// This creates a NEW document for EACH log message
+```
 
 ### 3. Execution ID Matching
 
-**CRITICAL:** The server must match log messages to executions using the `execution_id` field. The `execution_id` in log messages MUST match the `execution_id` from the original script message.
+**CRITICAL:** The server must:
+- ✅ Save **ALL** log messages with the same `execution_id` as **separate documents**
+- ✅ **NOT** use `execution_id` as a unique key that prevents multiple entries
+- ✅ Allow multiple log entries per execution_id
 
 ### 4. Message Processing
 
 Check if the server is:
-- ✅ Processing log messages asynchronously (not blocking)
-- ✅ Handling large log content (complete log files can be several KB)
+- ✅ Processing **ALL** log messages (not just the first one)
+- ✅ Creating a **NEW database entry** for each log message
+- ✅ Handling large log content (complete log files can be 4000+ characters)
 - ✅ Not silently dropping messages due to errors
 - ✅ Logging errors when message processing fails
 
@@ -137,25 +225,42 @@ ws.on('message', (data) => {
 });
 ```
 
-### Step 2: Check Database Storage
+### Step 2: Check Database Storage (CRITICAL FIX)
 
-Verify that log messages are being stored:
+**THE FIX:** Use `create()` or `insertOne()` to create a NEW document for EACH log message:
 
 ```javascript
-// After receiving log message
+// CORRECT: Create a new document for each log message
 if (message.type === 'log') {
-    await LogModel.create({
+    const logEntry = await LogModel.create({
         pc_id: pcId,  // From WebSocket connection
         script_name: message.script_name,
         execution_id: message.execution_id,
-        log_content: message.log_content,
+        log_content: message.log_content,  // This should be the FULL content
         log_level: message.log_level,
         log_file_path: message.log_file_path,
         timestamp: new Date()
     });
     
-    console.log('Log stored in database');
+    console.log(`Log stored in database: ${logEntry._id}`);
+    console.log(`  Content length: ${message.log_content.length} characters`);
+    console.log(`  Execution ID: ${message.execution_id}`);
 }
+
+// WRONG: Don't do this (overwrites previous logs):
+// await LogModel.findOneAndUpdate(
+//     { execution_id: message.execution_id },
+//     { log_content: message.log_content },
+//     { upsert: true }
+// );
+```
+
+**VERIFY:** After receiving multiple log messages for the same execution_id, check MongoDB:
+```javascript
+// Should return MULTIPLE documents, not just one
+const logs = await LogModel.find({ execution_id: "695e555b8e46bf7a69f2c828" });
+console.log(`Found ${logs.length} log entries for execution_id`);
+// Should be > 1 (initial log + chunks + complete log file)
 ```
 
 ### Step 3: Check for Silent Failures
@@ -187,6 +292,14 @@ if (!execution) {
     console.warning(`Execution ${message.execution_id} not found for log message`);
     // Should we still store the log? Probably yes, but log the warning
 }
+
+// CRITICAL: Verify you're creating multiple log entries
+const existingLogs = await LogModel.countDocuments({ 
+    execution_id: message.execution_id 
+});
+console.log(`Total logs for execution ${message.execution_id}: ${existingLogs}`);
+// This number should INCREASE with each log message received
+// If it stays at 1, you're overwriting instead of creating new entries
 ```
 
 ## Expected Behavior
@@ -216,13 +329,27 @@ According to the API documentation, the server should provide:
 
 ## Common Issues to Check
 
-1. **Message Type Not Handled**: Server might not have a handler for `type: "log"`
-2. **Execution ID Mismatch**: Server might be looking for logs with wrong execution_id format
-3. **Database Schema**: Log model might be missing required fields
-4. **Silent Errors**: Server might be catching errors but not logging them
-5. **Message Size**: Large log files might be getting rejected due to size limits
-6. **Async Processing**: Log processing might be failing silently in async operations
-7. **WebSocket Connection**: Server might not be properly identifying which PC sent the message
+1. **Overwriting Instead of Creating**: Server is using `findOneAndUpdate` or `upsert: true` which overwrites the first log entry
+2. **Unique Constraint**: MongoDB schema might have a unique index on `execution_id` preventing multiple log entries
+3. **Only Processing First Message**: Server might be stopping after processing the first log message
+4. **Message Type Not Handled**: Server might not have a handler for `type: "log"`
+5. **Execution ID Mismatch**: Server might be looking for logs with wrong execution_id format
+6. **Database Schema**: Log model might be missing required fields or have wrong constraints
+7. **Silent Errors**: Server might be catching errors but not logging them
+8. **Message Size**: Large log files might be getting rejected due to size limits
+9. **Async Processing**: Log processing might be failing silently in async operations
+10. **WebSocket Connection**: Server might not be properly identifying which PC sent the message
+
+## CRITICAL FIX REQUIRED
+
+**The server MUST save multiple log entries for the same execution_id.**
+
+When the PC client sends:
+1. Initial log: `"[*] Executing script: connected_devices.py"` → Server should save as Document #1
+2. Chunked logs during execution → Server should save as Documents #2, #3, #4...
+3. Complete log file (133 lines) → Server should save as Document #N with FULL content
+
+**All of these should be separate documents in MongoDB, all with the same execution_id.**
 
 ## Test Case
 

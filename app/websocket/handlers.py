@@ -175,11 +175,16 @@ async def handle_websocket_connection(websocket: WebSocket, pc_id: str):
                 
                 elif message_type == "log":
                     # Receive log messages from PC client
-                    # PC clients send logs at multiple points:
-                    # 1. Initial log when script starts
-                    # 2. Chunked logs during execution (stdout/stderr)
-                    # 3. Success/Error log after completion
-                    # 4. Complete log file content after execution
+                    # According to PC client documentation, logs are sent at multiple points:
+                    # 1. Initial log - When script execution starts
+                    # 2. Chunked logs - During script execution (stdout/stderr output in chunks)
+                    # 3. Success/Error log - After script completes (with SUCCESS or ERROR level)
+                    # 4. Complete log file - After execution, sends the ENTIRE log file content as a single log message
+                    # 5. Execution complete - Final message with execution status
+                    #
+                    # CRITICAL: Each log message creates a NEW document in MongoDB.
+                    # Multiple logs with the same execution_id are stored as separate documents.
+                    # This allows tracking the full execution flow from start to finish.
                     try:
                         execution_id = data.get("execution_id")
                         script_name = data.get("script_name", "unknown")
@@ -190,26 +195,28 @@ async def handle_websocket_connection(websocket: WebSocket, pc_id: str):
                         # Log the received message for debugging
                         logger.info(f"[{pc_id}] Received log message - script: {script_name}, execution_id: {execution_id}, level: {log_level}, content_length: {len(log_content)}")
                         
-                        # Always store log messages - PC may send multiple logs for same execution
-                        # (initial log, chunked logs, complete log file, etc.)
+                        # Always store log messages - PC sends multiple logs for same execution
+                        # Each message creates a NEW document (not an update)
+                        # This ensures we capture: initial log, chunks, complete log file, etc.
                         if log_content:  # Only store if there's actual content
                             log_entry = LogCreate(
                                 pc_id=pc_id,
                                 script_name=script_name,
                                 execution_id=execution_id,
                                 log_file_path=log_file_path,
-                                log_content=log_content,
+                                log_content=log_content,  # Can be multiline, can be complete log file (4000+ chars)
                                 log_level=log_level
                             )
                             
+                            # Creates a NEW document each time (uses insert_one, not find_one_and_update)
                             stored_log = await LogService.create_log(log_entry)
-                            logger.info(f"[{pc_id}] Log stored successfully - ID: {stored_log.id}, script: {script_name}, execution: {execution_id}, level: {log_level}")
+                            logger.info(f"[{pc_id}] Log stored successfully - ID: {stored_log.id}, script: {script_name}, execution: {execution_id}, level: {log_level}, content_length: {len(log_content)}")
                         else:
                             logger.warning(f"[{pc_id}] Received log message with empty content - script: {script_name}, execution_id: {execution_id}")
                             
                     except Exception as e:
                         logger.error(f"[{pc_id}] Error saving log message: {e}", exc_info=True)
-                        logger.error(f"[{pc_id}] Failed log data: script_name={data.get('script_name')}, execution_id={data.get('execution_id')}, log_level={data.get('log_level')}")
+                        logger.error(f"[{pc_id}] Failed log data: script_name={data.get('script_name')}, execution_id={data.get('execution_id')}, log_level={data.get('log_level')}, content_length={len(data.get('log_content', ''))}")
                 
                 elif message_type == "file_download_response":
                     # PC sends file download response
