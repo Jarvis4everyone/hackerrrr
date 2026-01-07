@@ -421,7 +421,6 @@ async def handle_websocket_connection(websocket: WebSocket, pc_id: str):
         logger.error(f"WebSocket error for {pc_id}: {e}")
     finally:
         # Clean up streaming connections when PC disconnects
-        from app.services.streaming_service import streaming_service
         await streaming_service.cleanup_pc_connections(pc_id)
         await manager.disconnect(pc_id)
 
