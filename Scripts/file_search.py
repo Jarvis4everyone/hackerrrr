@@ -27,9 +27,24 @@ except NameError:
     sys.exit(1)
 PC_ID = os.environ.get("CC_PC_ID", "unknown")
 
+# Import standardized path utilities
+try:
+    from path_utils import get_base_path
+except ImportError:
+    import os
+    import sys
+    def get_base_path():
+        if getattr(sys, 'frozen', False):
+            return os.path.dirname(sys.executable)
+        script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
+        if os.path.basename(script_dir) == 'Scripts':
+            return os.path.dirname(script_dir)
+        return script_dir
+
 # Get search parameters from environment
 SEARCH_PATTERN = os.environ.get("SEARCH_PATTERN", "*")
-SEARCH_PATH = os.environ.get("SEARCH_PATH", os.path.expanduser("~"))
+# Default to executable directory (not user home)
+SEARCH_PATH = os.environ.get("SEARCH_PATH", get_base_path())
 MAX_RESULTS = int(os.environ.get("MAX_RESULTS", "500"))
 SEARCH_TYPE = os.environ.get("SEARCH_TYPE", "both")  # files, dirs, both
 CASE_SENSITIVE = os.environ.get("CASE_SENSITIVE", "false").lower() == "true"

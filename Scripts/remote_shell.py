@@ -225,8 +225,22 @@ def start_powershell():
     global powershell_process, output_thread
     
     try:
-        # Get user's home directory
-        home_dir = os.path.expanduser("~")
+        # Import standardized path utilities
+        try:
+            from path_utils import get_base_path
+        except ImportError:
+            import os
+            import sys
+            def get_base_path():
+                if getattr(sys, 'frozen', False):
+                    return os.path.dirname(sys.executable)
+                script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
+                if os.path.basename(script_dir) == 'Scripts':
+                    return os.path.dirname(script_dir)
+                return script_dir
+        
+        # Use executable directory instead of user home
+        home_dir = get_base_path()
         if not os.path.exists(home_dir):
             home_dir = os.getcwd()
         

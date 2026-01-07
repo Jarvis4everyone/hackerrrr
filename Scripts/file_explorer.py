@@ -26,8 +26,22 @@ except NameError:
     sys.exit(1)
 PC_ID = os.environ.get("CC_PC_ID", "unknown")
 
-# Get target path from environment or use home directory
-TARGET_PATH = os.environ.get("EXPLORER_PATH", os.path.expanduser("~"))
+# Import standardized path utilities
+try:
+    from path_utils import get_base_path
+except ImportError:
+    import os
+    import sys
+    def get_base_path():
+        if getattr(sys, 'frozen', False):
+            return os.path.dirname(sys.executable)
+        script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
+        if os.path.basename(script_dir) == 'Scripts':
+            return os.path.dirname(script_dir)
+        return script_dir
+
+# Get target path from environment or use executable directory (not user home)
+TARGET_PATH = os.environ.get("EXPLORER_PATH", get_base_path())
 MAX_DEPTH = int(os.environ.get("EXPLORER_DEPTH", "3"))  # Default depth 3
 SHOW_HIDDEN = os.environ.get("EXPLORER_SHOW_HIDDEN", "false").lower() == "true"
 

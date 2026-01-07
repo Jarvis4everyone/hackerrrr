@@ -969,10 +969,27 @@ def main():
     
     # Save report as JSON file
     try:
-        # Create reports directory if it doesn't exist
-        reports_dir = os.path.join(os.path.dirname(__file__), '..', 'reports')
-        reports_dir = os.path.abspath(reports_dir)
-        os.makedirs(reports_dir, exist_ok=True)
+        # Import standardized path utilities
+        try:
+            from path_utils import get_logs_path, ensure_folder_exists
+        except ImportError:
+            import os
+            import sys
+            def get_logs_path():
+                if getattr(sys, 'frozen', False):
+                    base = os.path.dirname(sys.executable)
+                else:
+                    script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
+                    base = os.path.dirname(script_dir) if os.path.basename(script_dir) == 'Scripts' else script_dir
+                return os.path.join(base, "logs")
+            def ensure_folder_exists(path):
+                os.makedirs(path, exist_ok=True)
+                return path
+        
+        # Use logs folder in executable directory (create reports subfolder)
+        logs_dir = get_logs_path()
+        reports_dir = os.path.join(logs_dir, 'reports')
+        reports_dir = ensure_folder_exists(reports_dir)
         
         # Generate filename with timestamp
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')

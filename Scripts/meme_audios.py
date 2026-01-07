@@ -2,13 +2,30 @@
 """
 Meme Audio Player
 Plays random meme audio files from the Audios folder
-Audios folder should be in the PC client main directory
+Audios folder should be in the executable directory (malware exe directory)
 """
 import os
 import sys
 import random
 import subprocess
 import time
+
+# Import standardized path utilities
+try:
+    from path_utils import get_audios_path, find_folder
+except ImportError:
+    # Fallback if path_utils not available (shouldn't happen in normal execution)
+    import os
+    def get_audios_path():
+        script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
+        if os.path.basename(script_dir) == 'Scripts':
+            return os.path.join(os.path.dirname(script_dir), "Audios")
+        return os.path.join(script_dir, "Audios")
+    def find_folder(folder_name):
+        audios_path = get_audios_path()
+        if os.path.exists(audios_path) and os.path.isdir(audios_path):
+            return audios_path
+        return None
 
 # Number of audio files to play (from server)
 COUNT = int(os.environ.get("AUDIO_COUNT", "5"))
@@ -19,38 +36,21 @@ print("=" * 50)
 print("   Audio count: %d" % COUNT)
 print("=" * 50)
 
-# Find the Audios folder - same logic as wallpaper finding Hacked.jpg
-script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
-
-search_paths = [
-    os.path.join(os.getcwd(), "Audios"),                    # Current working directory
-    os.path.join(script_dir, "Audios"),                     # Script directory
-    os.path.join(script_dir, "..", "Audios"),               # Parent directory
-    os.path.join(os.path.expanduser("~"), "Audios"),        # User home
-]
-
-# Check PC_CLIENT_PATH environment variable (set by PC client)
-pc_client_path = os.environ.get("PC_CLIENT_PATH", "")
-if pc_client_path:
-    search_paths.insert(0, os.path.join(pc_client_path, "Audios"))
-
-# Find the Audios folder
-audio_folder = None
-for path in search_paths:
-    if os.path.exists(path) and os.path.isdir(path):
-        audio_folder = path
-        print("[+] Found Audios folder: %s" % path)
-        break
+# Find the Audios folder using standardized path resolution (executable directory)
+audio_folder = find_folder("Audios")
 
 if not audio_folder:
-    print("[-] ERROR: Audios folder not found!")
-    print("    Searched in:")
-    for p in search_paths:
-        print("      - %s" % p)
-    print("")
-    print("    Please ensure 'Audios' folder is in the PC client main directory")
-    print("    with audio files named like: audio (1).mp3, audio (2).mp3, etc.")
-    sys.exit(1)
+    audio_folder = get_audios_path()
+    if not os.path.exists(audio_folder):
+        print("[-] ERROR: Audios folder not found!")
+        print(f"    Expected location: {audio_folder}")
+        print("")
+        print("    Please ensure 'Audios' folder is in the executable directory")
+        print("    (relative to malware exe directory)")
+        print("    with audio files named like: audio (1).mp3, audio (2).mp3, etc.")
+        sys.exit(1)
+
+print("[+] Found Audios folder: %s" % audio_folder)
 
 # Find all audio files (mp3, wav)
 audio_files = []

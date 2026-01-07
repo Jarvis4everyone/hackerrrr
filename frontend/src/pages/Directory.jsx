@@ -152,13 +152,13 @@ const Directory = () => {
 
           {/* File Path Input */}
           <div>
-            <label className="block text-gray-400 font-mono text-sm mb-2">File Path</label>
+            <label className="block text-gray-400 font-mono text-sm mb-2">File Path (Relative to Executable Directory)</label>
             <div className="flex gap-2">
               <input
                 type="text"
                 value={filePath}
                 onChange={(e) => setFilePath(e.target.value)}
-                placeholder="C:\\Users\\Username\\Documents\\file.txt"
+                placeholder="Audios/audio (1).mp3, Photos/1.jpg, or build/WindowsMalwareProtection/file.pkg"
                 className="flex-1 bg-black/50 border border-white/10 hover:border-hack-green/50 text-white px-4 py-2 rounded-lg font-mono text-sm focus:outline-none focus:border-hack-green/50"
                 onKeyPress={(e) => e.key === 'Enter' && handleDownload()}
               />
@@ -181,7 +181,10 @@ const Directory = () => {
               </button>
             </div>
             <p className="text-gray-500 text-xs mt-2 font-mono">
-              Maximum file size: 100 MB
+              Maximum file size: 100 MB | Only paths from executable directory: Audios/, Photos/, build/, logs/
+            </p>
+            <p className="text-red-400/70 text-xs mt-1 font-mono">
+              ⚠️ Do NOT use user folder paths (C:\Users\...). Only use paths relative to malware exe directory.
             </p>
           </div>
         </div>

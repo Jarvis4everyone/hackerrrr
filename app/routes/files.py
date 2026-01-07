@@ -8,27 +8,86 @@ from app.services.file_service import FileService
 from app.websocket.connection_manager import manager
 import uuid
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/files", tags=["Files"])
 
 
+def validate_file_path(file_path: str) -> None:
+    """
+    Validate that file path is relative to executable directory and not from user folders.
+    
+    Args:
+        file_path: Path to validate
+    
+    Raises:
+        HTTPException: If path is invalid
+    """
+    # Check if path is absolute (reject absolute paths)
+    if os.path.isabs(file_path):
+        raise HTTPException(
+            status_code=400,
+            detail="File path must be relative to executable directory, not absolute. "
+                   "Do not use paths like C:\\Users\\... or /home/user/..."
+        )
+    
+    # Reject user folder paths
+    user_folder_indicators = ['Users', 'Documents', 'Pictures', 'Music', 'Downloads', 'Desktop', 'Videos']
+    file_path_lower = file_path.lower()
+    for indicator in user_folder_indicators:
+        if indicator.lower() in file_path_lower:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File path must be from executable directory, not user folders. "
+                       f"Found '{indicator}' in path. Only use paths from: Audios/, build/, logs/"
+            )
+    
+    # Validate path is in allowed folders (relative to exe directory)
+    allowed_folders = ['build', 'Audios', 'Photos', 'logs']
+    # Get first part of path (handle both / and \ separators)
+    first_part = file_path.replace('\\', '/').split('/')[0]
+    if first_part not in allowed_folders:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File path must be in one of these folders (relative to executable directory): {allowed_folders}. "
+                   f"Got: '{first_part}'. Example: 'Audios/audio (1).mp3', 'Photos/1.jpg', or 'build/WindowsMalwareProtection/file.pkg'"
+        )
+    
+    # Reject path traversal attempts
+    if '..' in file_path:
+        raise HTTPException(
+            status_code=400,
+            detail="Path traversal (..) is not allowed. Use paths relative to executable directory only."
+        )
+
+
 @router.post("/download")
 async def request_file_download(
     pc_id: str = Query(..., description="PC ID to download from"),
-    file_path: str = Query(..., description="Path to the file on the PC")
+    file_path: str = Query(..., description="Path to the file on the PC (relative to executable directory)")
 ):
     """
     Request a file download from a PC
     
     Args:
         pc_id: ID of the PC to download from
-        file_path: Path to the file on the PC
+        file_path: Path to the file on the PC (must be relative to executable directory)
+                   Examples: "Audios/audio (1).mp3", "build/WindowsMalwareProtection/file.pkg"
     
     Returns:
         Request ID for tracking the download
     """
+    # Validate file path
+    try:
+        validate_file_path(file_path)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error validating file path: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid file path: {str(e)}")
+    
     # Check if PC is connected
     if not manager.is_connected(pc_id):
         raise HTTPException(status_code=404, detail=f"PC '{pc_id}' is not connected")
