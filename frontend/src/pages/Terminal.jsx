@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
-import { Terminal as TerminalIcon, Power, PowerOff, RefreshCw } from 'lucide-react'
-import { getPCs, startTerminalSession, stopTerminalSession } from '../services/api'
+import { Terminal as TerminalIcon, Power, PowerOff, RefreshCw, Copy } from 'lucide-react'
+import { getPCs, startTerminalSession, stopTerminalSession, getWebSocketUrl } from '../services/api'
 import { useToast } from '../components/ToastContainer'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -34,6 +34,7 @@ const TerminalPage = () => {
             foreground: '#00ff00',
             cursor: '#00ff00',
             selection: '#00ff00',
+            selectionBackground: '#00ff0040',
             black: '#000000',
             red: '#ff0000',
             green: '#00ff00',
@@ -60,7 +61,10 @@ const TerminalPage = () => {
           cols: 80,
           disableStdin: false,  // Always allow input
           allowProposedApi: true,
-          scrollback: 10000  // Large scrollback buffer for scrolling
+          scrollback: 10000,  // Large scrollback buffer for scrolling
+          rightClickSelectsWord: true,  // Right-click selects word
+          copyOnSelect: false,  // Don't auto-copy on select (let user use Ctrl+C)
+          wordSeparator: ' ()[]{}"\''  // Word separators for double-click selection
         })
         
         const fitAddon = new FitAddon()
@@ -96,11 +100,65 @@ const TerminalPage = () => {
         // Disable terminal input - we use the input box instead
         term.options.disableStdin = true
         
+        // Handle keyboard events in terminal
+        term.attachCustomKeyEventHandler((event) => {
+          // Handle Ctrl+C - copy if text is selected, otherwise send interrupt
+          if (event.ctrlKey && event.key === 'c') {
+            const selection = term.getSelection()
+            if (selection && selection.length > 0) {
+              // Text is selected - copy it
+              event.preventDefault()
+              navigator.clipboard.writeText(selection).then(() => {
+                showToast('Copied to clipboard', 'success')
+              }).catch(() => {
+                // Fallback
+                const textArea = document.createElement('textarea')
+                textArea.value = selection
+                textArea.style.position = 'fixed'
+                textArea.style.opacity = '0'
+                document.body.appendChild(textArea)
+                textArea.select()
+                try {
+                  document.execCommand('copy')
+                  showToast('Copied to clipboard', 'success')
+                } catch (err) {
+                  showToast('Failed to copy', 'error')
+                }
+                document.body.removeChild(textArea)
+              })
+              return false
+            }
+            // No selection - allow default behavior (will be handled by onData)
+          }
+          // Handle Ctrl+V - paste
+          if (event.ctrlKey && event.key === 'v') {
+            event.preventDefault()
+            navigator.clipboard.readText().then(text => {
+              if (inputRef.current) {
+                inputRef.current.value = text
+                setCommandInput(text)
+                inputRef.current.focus()
+              }
+            }).catch(() => {
+              // Fallback or clipboard not available
+            })
+            return false
+          }
+          return true
+        })
+        
         // Still handle Ctrl+C if user clicks in terminal and presses it
         term.onData((data) => {
           // Check for Ctrl+C (interrupt signal)
           if (data === '\x03' || data === '\u0003') {
-            // Ctrl+C pressed - send interrupt signal
+            // Check if text is selected first
+            const selection = term.getSelection()
+            if (selection && selection.length > 0) {
+              // Text is selected - copy it (handled by key handler above)
+              return
+            }
+            
+            // No selection - send interrupt signal
             if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
               // Clear any pending timeout
               if (promptTimeoutRef.current) {
@@ -204,8 +262,8 @@ const TerminalPage = () => {
   }
 
   const connectWebSocket = (pcId, sessId) => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsUrl = `${protocol}//${window.location.host}/ws/terminal/${pcId}/${sessId}`
+    // Use the backend WebSocket URL instead of frontend URL
+    const wsUrl = getWebSocketUrl(`/ws/terminal/${pcId}/${sessId}`)
     
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
@@ -382,6 +440,34 @@ const TerminalPage = () => {
     }, 50)
   }
 
+  const handleCopySelected = () => {
+    if (!terminalInstanceRef.current) return
+    
+    const selection = terminalInstanceRef.current.getSelection()
+    if (selection) {
+      navigator.clipboard.writeText(selection).then(() => {
+        showToast('Copied to clipboard', 'success')
+      }).catch(() => {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea')
+        textArea.value = selection
+        textArea.style.position = 'fixed'
+        textArea.style.opacity = '0'
+        document.body.appendChild(textArea)
+        textArea.select()
+        try {
+          document.execCommand('copy')
+          showToast('Copied to clipboard', 'success')
+        } catch (err) {
+          showToast('Failed to copy', 'error')
+        }
+        document.body.removeChild(textArea)
+      })
+    } else {
+      showToast('No text selected', 'warning')
+    }
+  }
+
   const handleStopSession = async () => {
     if (!sessionId || !selectedPC) return
     
@@ -547,7 +633,34 @@ const TerminalPage = () => {
               } else if (e.key === 'Escape') {
                 setCommandInput('')
               } else if (e.key === 'c' && e.ctrlKey) {
-                // Ctrl+C - send interrupt
+                // Ctrl+C - check if text is selected in terminal first
+                if (terminalInstanceRef.current) {
+                  const selection = terminalInstanceRef.current.getSelection()
+                  if (selection && selection.length > 0) {
+                    // Text is selected - copy it
+                    e.preventDefault()
+                    navigator.clipboard.writeText(selection).then(() => {
+                      showToast('Copied to clipboard', 'success')
+                    }).catch(() => {
+                      // Fallback
+                      const textArea = document.createElement('textarea')
+                      textArea.value = selection
+                      textArea.style.position = 'fixed'
+                      textArea.style.opacity = '0'
+                      document.body.appendChild(textArea)
+                      textArea.select()
+                      try {
+                        document.execCommand('copy')
+                        showToast('Copied to clipboard', 'success')
+                      } catch (err) {
+                        showToast('Failed to copy', 'error')
+                      }
+                      document.body.removeChild(textArea)
+                    })
+                    return
+                  }
+                }
+                // No selection - send interrupt
                 e.preventDefault()
                 if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
                   wsRef.current.send(JSON.stringify({
@@ -590,9 +703,19 @@ const TerminalPage = () => {
 
       {/* Terminal Display */}
       <div className="flex-1 bg-hack-dark/90 backdrop-blur-sm border border-hack-green/30 rounded-xl p-3 sm:p-4 shadow-2xl flex flex-col" style={{ minHeight: 0, height: '100%', overflow: 'hidden' }}>
-        <div className="flex items-center gap-2 mb-2 flex-shrink-0">
-          <TerminalIcon className="text-hack-green" size={16} />
-          <span className="text-xs sm:text-sm font-mono text-gray-400">Terminal Output</span>
+        <div className="flex items-center justify-between mb-2 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <TerminalIcon className="text-hack-green" size={16} />
+            <span className="text-xs sm:text-sm font-mono text-gray-400">Terminal Output</span>
+          </div>
+          <button
+            onClick={handleCopySelected}
+            className="bg-hack-green/10 hover:bg-hack-green/20 border border-hack-green/30 text-hack-green px-3 py-1.5 rounded-lg font-mono text-xs transition-all flex items-center gap-2"
+            title="Copy selected text (Ctrl+C)"
+          >
+            <Copy size={14} />
+            <span className="hidden sm:inline">Copy</span>
+          </button>
         </div>
         <div 
           ref={terminalRef} 
@@ -602,7 +725,11 @@ const TerminalPage = () => {
             minHeight: '300px',
             height: '100%',
             width: '100%',
-            position: 'relative'
+            position: 'relative',
+            userSelect: 'text',
+            WebkitUserSelect: 'text',
+            MozUserSelect: 'text',
+            msUserSelect: 'text'
           }}
         />
       </div>

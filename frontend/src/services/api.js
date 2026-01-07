@@ -293,5 +293,23 @@ export const verifyToken = async () => {
   }
 }
 
+// Helper function to get WebSocket URL
+export const getWebSocketUrl = (path = '') => {
+  // Determine the base URL for WebSocket connections
+  let wsBaseUrl = API_BASE_URL
+  
+  // If API_BASE_URL is empty (same origin), use current location
+  if (!wsBaseUrl) {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    return `${protocol}//${window.location.host}${path}`
+  }
+  
+  // Convert HTTP/HTTPS URL to WS/WSS
+  const protocol = wsBaseUrl.startsWith('https') ? 'wss:' : 'ws:'
+  const host = wsBaseUrl.replace(/^https?:\/\//, '')
+  
+  return `${protocol}//${host}${path}`
+}
+
 export default api
 

@@ -284,7 +284,7 @@ const Scripts = () => {
     <div className="min-h-screen bg-black p-4 sm:p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="bg-hack-dark/90 backdrop-blur-sm border border-white/10 rounded-xl p-6 shadow-2xl">
+        <div className="bg-hack-dark/90 backdrop-blur-sm border border-white/10 rounded-xl p-4 sm:p-6 shadow-2xl">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-hack-green/10 rounded-lg border border-hack-green/20">
@@ -308,7 +308,7 @@ const Scripts = () => {
         </div>
 
         {/* Search Bar */}
-        <div className="bg-hack-dark/90 backdrop-blur-sm border border-white/10 rounded-xl p-4">
+        <div className="bg-hack-dark/90 backdrop-blur-sm border border-white/10 rounded-xl p-3 sm:p-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-white/50" size={20} />
             <input
@@ -514,8 +514,8 @@ const Scripts = () => {
 
         {/* Script Configuration Modal */}
         {selectedScript && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-hack-dark/95 backdrop-blur-sm border border-white/10 rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto custom-scrollbar">
+          <div className="fixed inset-0 bg-transparent flex items-start justify-center z-50 p-2 sm:p-4 pt-4 sm:pt-8 md:pt-16">
+            <div className="bg-hack-dark/95 backdrop-blur-sm border border-white/10 rounded-xl p-4 sm:p-6 max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl">
               <div className="flex justify-between items-center mb-6">
                 <div className="flex items-center gap-3">
                   <FileCode className="text-hack-green" size={24} />
@@ -662,8 +662,8 @@ const Scripts = () => {
 
         {/* Confirmation Dialog */}
         {showConfirmDialog && pendingSend && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-hack-dark/95 border border-hack-green/30 rounded-xl p-6 max-w-md w-full shadow-2xl">
+        <div className="fixed inset-0 bg-transparent z-50 flex items-start justify-center p-2 sm:p-4 pt-4 sm:pt-8 md:pt-16">
+          <div className="bg-hack-dark/95 backdrop-blur-sm border border-hack-green/30 rounded-xl p-4 sm:p-6 max-w-md w-full shadow-2xl">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 bg-yellow-400/10 rounded-full flex items-center justify-center border border-yellow-400/30">
                 <AlertTriangle className="text-yellow-400" size={24} />
