@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { Terminal as TerminalIcon, Power, PowerOff, RefreshCw, Copy } from 'lucide-react'
 import { getPCs, startTerminalSession, stopTerminalSession, getWebSocketUrl } from '../services/api'
 import { useToast } from '../components/ToastContainer'
+import { useStreaming } from '../contexts/StreamingContext'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
@@ -21,6 +22,7 @@ const TerminalPage = () => {
   const lastCommandTimeRef = useRef(null)
   const inputRef = useRef(null)
   const { showToast } = useToast()
+  const { setStreamActive, registerStopCallback, unregisterStopCallback } = useStreaming()
 
   useEffect(() => {
     loadPCs()
@@ -499,6 +501,10 @@ const TerminalPage = () => {
       }
       
       showToast('Terminal session stopped', 'success')
+      
+      // Unregister from streaming context
+      setStreamActive('terminal', false)
+      unregisterStopCallback('terminal')
     } catch (error) {
       console.error('Error stopping terminal session:', error)
       // Don't show error if it's just a 404 (session already ended)
@@ -517,15 +523,13 @@ const TerminalPage = () => {
         promptTimeoutRef.current = null
       }
       // Cleanup on unmount
-      if (wsRef.current) {
-        wsRef.current.close()
+      if (isConnected) {
+        handleStopSession()
       }
-      if (sessionId && selectedPC) {
-        // Try to stop session silently
-        stopTerminalSession(sessionId, selectedPC).catch(() => {})
-      }
+      unregisterStopCallback('terminal')
+      setStreamActive('terminal', false)
     }
-  }, [sessionId, selectedPC])
+  }, [sessionId, selectedPC, isConnected])
 
   return (
     <div className="flex flex-col space-y-3 sm:space-y-4" style={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>

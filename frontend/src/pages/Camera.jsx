@@ -55,6 +55,10 @@ const CameraPage = () => {
         }))
         
         showToast('Camera stream started', 'success')
+        
+        // Register with streaming context
+        setStreamActive('camera', true)
+        registerStopCallback('camera', stopStream)
       }
 
       ws.onmessage = (event) => {
@@ -121,6 +125,8 @@ const CameraPage = () => {
     if (videoRef.current) {
       videoRef.current.src = ''
     }
+    setStreamActive('camera', false)
+    unregisterStopCallback('camera')
     showToast('Camera stream stopped', 'info')
   }
 

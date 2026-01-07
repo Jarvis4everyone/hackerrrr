@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { Monitor, Power, PowerOff, RefreshCw, Maximize2 } from 'lucide-react'
 import { getPCs, getWebSocketUrl } from '../services/api'
 import { useToast } from '../components/ToastContainer'
+import { useStreaming } from '../contexts/StreamingContext'
 
 const ScreenPage = () => {
   const [pcs, setPCs] = useState([])
@@ -13,14 +14,17 @@ const ScreenPage = () => {
   const containerRef = useRef(null)
   const wsRef = useRef(null)
   const { showToast } = useToast()
+  const { setStreamActive, registerStopCallback, unregisterStopCallback } = useStreaming()
 
   useEffect(() => {
     loadPCs()
     return () => {
       // Cleanup on unmount
       if (wsRef.current) {
-        wsRef.current.close()
+        stopStream()
       }
+      unregisterStopCallback('screen')
+      setStreamActive('screen', false)
     }
   }, [])
 
@@ -99,6 +103,10 @@ const ScreenPage = () => {
         }))
         
         showToast('Screen share started', 'success')
+        
+        // Register with streaming context
+        setStreamActive('screen', true)
+        registerStopCallback('screen', stopStream)
       }
 
       ws.onmessage = (event) => {
@@ -165,6 +173,8 @@ const ScreenPage = () => {
     if (screenRef.current) {
       screenRef.current.src = ''
     }
+    setStreamActive('screen', false)
+    unregisterStopCallback('screen')
     showToast('Screen share stopped', 'info')
   }
 

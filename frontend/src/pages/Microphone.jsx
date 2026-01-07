@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { Mic, Power, PowerOff, RefreshCw, Volume2 } from 'lucide-react'
 import { getPCs, getWebSocketUrl } from '../services/api'
 import { useToast } from '../components/ToastContainer'
+import { useStreaming } from '../contexts/StreamingContext'
 
 const MicrophonePage = () => {
   const [pcs, setPCs] = useState([])
@@ -17,17 +18,17 @@ const MicrophonePage = () => {
   const isPlayingRef = useRef(false)
   const wsRef = useRef(null)
   const { showToast } = useToast()
+  const { setStreamActive, registerStopCallback, unregisterStopCallback } = useStreaming()
 
   useEffect(() => {
     loadPCs()
     return () => {
       // Cleanup on unmount
       if (wsRef.current) {
-        wsRef.current.close()
+        stopStream()
       }
-      if (audioContextRef.current) {
-        audioContextRef.current.close()
-      }
+      unregisterStopCallback('microphone')
+      setStreamActive('microphone', false)
     }
   }, [])
 
@@ -85,6 +86,10 @@ const MicrophonePage = () => {
         }))
         
         showToast('Microphone stream started', 'success')
+        
+        // Register with streaming context
+        setStreamActive('microphone', true)
+        registerStopCallback('microphone', stopStream)
       }
 
       // Audio playback function
@@ -215,6 +220,8 @@ const MicrophonePage = () => {
     isPlayingRef.current = false
     setIsStreaming(false)
     setAudioLevel(0)
+    setStreamActive('microphone', false)
+    unregisterStopCallback('microphone')
     showToast('Microphone stream stopped', 'info')
   }
 

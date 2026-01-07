@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
+import { StreamingProvider } from './contexts/StreamingContext'
 import { ToastProvider } from './components/ToastContainer'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -17,37 +18,38 @@ import Screen from './pages/Screen'
 function App() {
   return (
     <AuthProvider>
-      <ToastProvider>
-        <Router>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route
-              path="/*"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Routes>
-                      <Route path="/" element={<Dashboard />} />
-                      <Route path="/pcs" element={<PCs />} />
-                      <Route path="/scripts" element={<Scripts />} />
-                      <Route path="/directory" element={<Directory />} />
-                      <Route path="/terminal" element={<Terminal />} />
-                      <Route path="/logs" element={<Logs />} />
-                      <Route path="/camera" element={<Camera />} />
-                      <Route path="/microphone" element={<Microphone />} />
-                      <Route path="/screen" element={<Screen />} />
-                      <Route path="*" element={<Navigate to="/" replace />} />
-                    </Routes>
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-          </Routes>
-        </Router>
-      </ToastProvider>
+      <StreamingProvider>
+        <ToastProvider>
+          <Router>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route
+                path="/*"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <Routes>
+                        <Route path="/" element={<Dashboard />} />
+                        <Route path="/pcs" element={<PCs />} />
+                        <Route path="/scripts" element={<Scripts />} />
+                        <Route path="/directory" element={<Directory />} />
+                        <Route path="/terminal" element={<Terminal />} />
+                        <Route path="/logs" element={<Logs />} />
+                        <Route path="/camera" element={<Camera />} />
+                        <Route path="/microphone" element={<Microphone />} />
+                        <Route path="/screen" element={<Screen />} />
+                        <Route path="*" element={<Navigate to="/" replace />} />
+                      </Routes>
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+            </Routes>
+          </Router>
+        </ToastProvider>
+      </StreamingProvider>
     </AuthProvider>
   )
 }
 
 export default App
-
