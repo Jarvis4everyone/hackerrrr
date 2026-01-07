@@ -220,9 +220,9 @@ class CameraStreamer:
                         self.is_streaming = False
                         break
                 
-                # Limit frame rate to prevent network congestion
-                # 15 FPS = ~66ms per frame - good balance between smoothness and latency
-                await asyncio.sleep(0.066)  # ~15 FPS to prevent overwhelming network
+                # Send 1 frame per second for clear, high-quality images
+                # 1 FPS = 1 second per frame - allows high quality without overwhelming network
+                await asyncio.sleep(1.0)  # 1 FPS for clear images
                 
             except Exception as e:
                 print(f"[Camera] Error: {e}")
@@ -481,9 +481,9 @@ class ScreenStreamer:
                         self.is_streaming = False
                         break
                 
-                # Limit frame rate to prevent network congestion
-                # 15 FPS = ~66ms per frame - good balance between smoothness and latency
-                await asyncio.sleep(0.066)  # ~15 FPS to prevent overwhelming network
+                # Send 1 frame per second for clear, high-quality images
+                # 1 FPS = 1 second per frame - allows high quality without overwhelming network
+                await asyncio.sleep(1.0)  # 1 FPS for clear images
                 
             except Exception as e:
                 print(f"[Screen] Error: {e}")
