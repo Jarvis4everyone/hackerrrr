@@ -118,14 +118,16 @@ class Settings(BaseSettings):
     # Authentication Configuration
     # Can be set via environment variables: AUTH_USERNAME and AUTH_PASSWORD
     # Or via .env file using "Username" and "Password" (case-sensitive, with spaces around =)
-    AUTH_USERNAME: str = os.getenv("AUTH_USERNAME", "admin")
-    AUTH_PASSWORD: str = os.getenv("AUTH_PASSWORD", "admin")
+    # Defaults will be overridden by .env file reading below
+    AUTH_USERNAME: str = "admin"
+    AUTH_PASSWORD: str = "admin"
 
 
 settings = Settings()
 
 # Manually read from .env file to handle spaces and case sensitivity
 # Pydantic Settings doesn't handle spaces around = sign well
+# Priority: Environment variables > .env file > defaults
 env_file_path = PROJECT_ROOT / ".env"
 if env_file_path.exists():
     try:
@@ -149,10 +151,20 @@ if env_file_path.exists():
                         settings.SERVER_URL = value
                     elif key == "Username" and not os.getenv("AUTH_USERNAME"):
                         settings.AUTH_USERNAME = value
+                        logger.info(f"Loaded AUTH_USERNAME from .env file: '{value}'")
                     elif key == "Password" and not os.getenv("AUTH_PASSWORD"):
                         settings.AUTH_PASSWORD = value
+                        logger.info(f"Loaded AUTH_PASSWORD from .env file (length: {len(value)})")
     except Exception as e:
         logger.warning(f"Error reading .env file: {e}")
+
+# Override with environment variables if they exist (highest priority)
+if os.getenv("AUTH_USERNAME"):
+    settings.AUTH_USERNAME = os.getenv("AUTH_USERNAME")
+    logger.info(f"Overriding AUTH_USERNAME from environment variable: '{settings.AUTH_USERNAME}'")
+if os.getenv("AUTH_PASSWORD"):
+    settings.AUTH_PASSWORD = os.getenv("AUTH_PASSWORD")
+    logger.info(f"Overriding AUTH_PASSWORD from environment variable (length: {len(settings.AUTH_PASSWORD)})")
 
 # Set default SERVER_URL if not provided
 if not settings.SERVER_URL:

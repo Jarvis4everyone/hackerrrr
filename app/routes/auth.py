@@ -70,16 +70,23 @@ async def login(login_data: LoginRequest):
     logger = logging.getLogger(__name__)
     
     # Debug logging (without password)
-    logger.info(f"Login attempt - Username: {login_data.username}")
-    logger.info(f"Expected username: {settings.AUTH_USERNAME}")
+    logger.info(f"Login attempt - Username: '{login_data.username}'")
+    logger.info(f"Expected username: '{settings.AUTH_USERNAME}'")
     logger.info(f"Username match: {login_data.username == settings.AUTH_USERNAME}")
     logger.info(f"Password provided: {'YES' if login_data.password else 'NO'}")
     logger.info(f"Password length: {len(login_data.password) if login_data.password else 0}")
+    logger.info(f"Expected password length: {len(settings.AUTH_PASSWORD) if settings.AUTH_PASSWORD else 0}")
     logger.info(f"Password match: {login_data.password == settings.AUTH_PASSWORD}")
-    logger.info(f"Settings AUTH_USERNAME: '{settings.AUTH_USERNAME}'")
-    logger.info(f"Settings AUTH_PASSWORD length: {len(settings.AUTH_PASSWORD) if settings.AUTH_PASSWORD else 0}")
+    logger.info(f"Settings AUTH_USERNAME: '{settings.AUTH_USERNAME}' (type: {type(settings.AUTH_USERNAME)})")
+    logger.info(f"Settings AUTH_PASSWORD: {'*' * len(settings.AUTH_PASSWORD) if settings.AUTH_PASSWORD else 'NOT SET'} (type: {type(settings.AUTH_PASSWORD)})")
     
-    if login_data.username != settings.AUTH_USERNAME or login_data.password != settings.AUTH_PASSWORD:
+    # Strict comparison - ensure exact match
+    username_match = login_data.username.strip() == settings.AUTH_USERNAME.strip() if settings.AUTH_USERNAME else False
+    password_match = login_data.password.strip() == settings.AUTH_PASSWORD.strip() if settings.AUTH_PASSWORD else False
+    
+    logger.info(f"After strip - Username match: {username_match}, Password match: {password_match}")
+    
+    if not username_match or not password_match:
         logger.warning(f"Login failed for username: {login_data.username}")
         raise HTTPException(status_code=401, detail="Invalid username or password")
     
