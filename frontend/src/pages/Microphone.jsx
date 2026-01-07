@@ -524,16 +524,9 @@ const MicrophonePage = () => {
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-4 mb-3">
-                      <div className="flex items-center gap-2">
-                        <div className="p-1.5 bg-hack-green/20 rounded border border-hack-green/30">
-                          <span className="text-hack-green font-mono font-bold text-lg">
-                            {chunk.chunkNumber}
-                          </span>
-                        </div>
-                        <span className="text-gray-300 font-mono font-semibold text-base">
-                          Audio Chunk
-                        </span>
-                      </div>
+                      <span className="text-hack-green font-mono font-bold text-lg">
+                        Chunk {chunk.chunkNumber}
+                      </span>
                       <div className="flex items-center gap-2 text-gray-400">
                         <Clock size={14} />
                         <span className="font-mono text-sm">{formatTime(chunk.timestamp)}</span>
