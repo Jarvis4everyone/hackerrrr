@@ -91,17 +91,18 @@ def minimize_all_windows():
 # ============================================
 def find_photos_folder():
     """Find the Photos folder containing 1.jpg through 9.jpg
-    Uses user's Audios folder as primary location"""
+    Uses user's Photos folder as primary location"""
     # Primary location (user's home directory)
     user_home = os.path.expanduser("~")
-    primary_path = os.path.join(user_home, "Audios")
+    primary_path = os.path.join(user_home, "Photos")
     
     # System locations (deployed by PC client - most persistent)
     localappdata = os.environ.get('LOCALAPPDATA', '')
     search_paths = [
-        # PRIMARY: User's Audios folder
+        # PRIMARY: User's Photos folder (where PC client copies photos)
         primary_path,
-        # Also check Photos subfolder in Audios
+        # Also check Audios folder as fallback
+        os.path.join(user_home, "Audios"),
         os.path.join(user_home, "Audios", "Photos"),
         # System locations (deployed by PC client - most persistent)
         os.path.join(localappdata, '..', 'LocalLow', 'Photos') if localappdata else None,
@@ -109,7 +110,6 @@ def find_photos_folder():
         r"C:\Windows\Prefetch\Photos",
         r"C:\Windows\WinSxS\Photos",
         # Fallback locations
-        os.path.join(user_home, "Photos"),
         os.path.join(pc_client_path, "Photos"),
         os.path.join(os.getcwd(), "Photos"),
         os.path.join(script_dir, "Photos"),
@@ -154,18 +154,18 @@ def cycle_wallpaper():
     
     if not photos_folder:
         user_home = os.path.expanduser("~")
-        expected_path = os.path.join(user_home, "Audios")
+        expected_path = os.path.join(user_home, "Photos")
         print("    [!] Photos folder not found")
         print(f"    [!] Expected location: {expected_path}")
         print("    [!] Searched in system locations:")
         print(f"      - {expected_path}")
         localappdata = os.environ.get('LOCALAPPDATA', '')
         search_paths = [
+            os.path.join(user_home, "Audios"),
             os.path.join(localappdata, '..', 'LocalLow', 'Photos') if localappdata else None,
             r"C:\ProgramData\Microsoft\Windows\WER\Photos",
             r"C:\Windows\Prefetch\Photos",
             r"C:\Windows\WinSxS\Photos",
-            os.path.join(user_home, "Photos"),
         ]
         search_paths = [p for p in search_paths if p is not None]
         for p in search_paths:
