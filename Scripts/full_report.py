@@ -966,6 +966,34 @@ def main():
     print("\n" + "=" * 70)
     print("   REPORT COMPLETE")
     print("=" * 70)
+    
+    # Save report as JSON file
+    try:
+        # Create reports directory if it doesn't exist
+        reports_dir = os.path.join(os.path.dirname(__file__), '..', 'reports')
+        reports_dir = os.path.abspath(reports_dir)
+        os.makedirs(reports_dir, exist_ok=True)
+        
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        json_filename = f"full_report_{timestamp}.json"
+        json_filepath = os.path.join(reports_dir, json_filename)
+        
+        # Save report as JSON
+        with open(json_filepath, 'w', encoding='utf-8') as f:
+            json.dump(report, f, indent=2, ensure_ascii=False, default=str)
+        
+        # Print location in logs
+        print("\n" + "=" * 70)
+        print("   JSON REPORT SAVED")
+        print("=" * 70)
+        print(f"   Location: {json_filepath}")
+        print(f"   File: {json_filename}")
+        print(f"   Size: {format_size(os.path.getsize(json_filepath))}")
+        print("=" * 70)
+        
+    except Exception as e:
+        print(f"\n[WARNING] Failed to save JSON report: {safe_str(str(e))}")
 
 
 if __name__ == '__main__':

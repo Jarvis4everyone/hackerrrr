@@ -19,12 +19,26 @@ print("   Duration: %d seconds" % DURATION)
 print("   Exit: Wait for timer or Ctrl+Alt+Del")
 print("=" * 50)
 
-# Try to import tkinter
+# Try to import tkinter and PIL
 try:
     import tkinter as tk
+    from PIL import Image, ImageTk
+    PIL_AVAILABLE = True
 except ImportError:
-    print("[!] tkinter not available")
-    sys.exit(1)
+    PIL_AVAILABLE = False
+    try:
+        import tkinter as tk
+    except ImportError:
+        print("[!] tkinter not available")
+        sys.exit(1)
+
+# Try to import qrcode for QR code generation
+try:
+    import qrcode
+    QRCODE_AVAILABLE = True
+except ImportError:
+    QRCODE_AVAILABLE = False
+    print("[!] qrcode library not available - QR code will show as white square")
 
 def create_bsod():
     """Create a fake BSOD window."""
@@ -91,10 +105,53 @@ def create_bsod():
     )
     timer_label.place(relx=0.99, rely=0.99, anchor='se')
     
-    # QR code placeholder (white square)
-    qr_frame = tk.Frame(root, bg='white', width=80, height=80)
-    qr_frame.place(relx=0.08, rely=0.78, anchor='w')
-    qr_frame.pack_propagate(False)
+    # QR code (generate actual QR code if libraries available)
+    if QRCODE_AVAILABLE and PIL_AVAILABLE:
+        try:
+            # Generate QR code pointing to Windows stop code page
+            qr = qrcode.QRCode(
+                version=1,
+                error_correction=qrcode.constants.ERROR_CORRECT_L,
+                box_size=4,  # Increased from 2 to 4 for better visibility
+                border=3,     # Increased border for better visibility
+            )
+            qr.add_data('https://www.windows.com/stopcode')
+            qr.make(fit=True)
+            
+            # Create QR code image (black on white for high contrast)
+            qr_img = qr.make_image(fill_color="black", back_color="white")
+            # Resize to make it more visible (200x200 pixels - larger than before)
+            qr_img = qr_img.resize((200, 200), Image.Resampling.LANCZOS)
+            
+            # Convert to PhotoImage for tkinter
+            qr_photo = ImageTk.PhotoImage(qr_img)
+            
+            # Create label with QR code image
+            qr_label = tk.Label(
+                root,
+                image=qr_photo,
+                bg='#0078D7'  # BSOD blue background
+            )
+            qr_label.image = qr_photo  # Keep a reference to prevent garbage collection
+            qr_label.place(relx=0.08, rely=0.78, anchor='w')
+            print("[*] QR code displayed successfully")
+        except Exception as e:
+            print(f"[!] Error creating QR code: {e}")
+            import traceback
+            traceback.print_exc()
+            # Fallback to white square if QR code generation fails
+            qr_frame = tk.Frame(root, bg='white', width=200, height=200)
+            qr_frame.place(relx=0.08, rely=0.78, anchor='w')
+            qr_frame.pack_propagate(False)
+    else:
+        # Fallback: white square placeholder if libraries not available
+        if not QRCODE_AVAILABLE:
+            print("[!] qrcode library not installed - install with: pip install qrcode[pil]")
+        if not PIL_AVAILABLE:
+            print("[!] PIL/Pillow not installed - install with: pip install Pillow")
+        qr_frame = tk.Frame(root, bg='white', width=200, height=200)
+        qr_frame.place(relx=0.08, rely=0.78, anchor='w')
+        qr_frame.pack_propagate(False)
     
     # Stop code info
     stop_code = tk.Label(
