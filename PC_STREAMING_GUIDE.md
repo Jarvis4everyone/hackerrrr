@@ -6,6 +6,45 @@ This guide explains how to implement camera, microphone, and screen sharing func
 
 The streaming system uses WebSocket to send frames/audio chunks from the PC to the server, which then forwards them to the frontend. This approach works in both localhost and production environments without requiring STUN/TURN servers.
 
+## Heartbeat System
+
+**IMPORTANT**: The PC client must send a heartbeat message every **60 seconds** to keep the connection marked as online. However, if the PC is actively streaming (camera, microphone, or screen), it will automatically stay online even without heartbeat.
+
+### Heartbeat Message Format
+
+```json
+{
+  "type": "heartbeat",
+  "status": "ok"
+}
+```
+
+### Heartbeat Implementation
+
+```python
+import asyncio
+import json
+
+async def send_heartbeat_periodically(websocket):
+    """Send heartbeat every 60 seconds"""
+    while True:
+        await asyncio.sleep(60)  # Wait 60 seconds
+        try:
+            if not websocket.closed:
+                await websocket.send(json.dumps({
+                    "type": "heartbeat",
+                    "status": "ok"
+                }))
+        except Exception as e:
+            print(f"[Heartbeat] Error: {e}")
+            break
+
+# Start heartbeat in background task
+asyncio.create_task(send_heartbeat_periodically(websocket))
+```
+
+**Note**: Streaming activity (camera frames, microphone audio, screen frames) automatically updates the PC's `last_seen` timestamp, so the PC will stay online during active streaming even without explicit heartbeat messages.
+
 ## Architecture
 
 1. **PC Client** captures video/audio/screen frames

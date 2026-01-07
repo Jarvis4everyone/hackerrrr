@@ -29,15 +29,16 @@ async def cleanup_stale_connections():
     import asyncio
     from datetime import datetime, timedelta
     from app.services.pc_service import PCService
+    from app.services.streaming_service import streaming_service
     from app.websocket.connection_manager import manager
     
     while True:
         try:
-            await asyncio.sleep(60)  # Check every 60 seconds
+            await asyncio.sleep(30)  # Check every 30 seconds
             
-            # Mark PCs as offline if they haven't sent a heartbeat in 5 minutes
-            # Increased from 90 seconds to handle long-running scripts
-            cutoff_time = datetime.utcnow() - timedelta(seconds=300)  # 5 minutes
+            # Mark PCs as offline if they haven't sent a heartbeat in 1 minute (60 seconds)
+            # But only if they're not actively streaming
+            cutoff_time = datetime.utcnow() - timedelta(seconds=60)  # 1 minute
             
             # Get all PCs marked as connected in DB
             from app.database import get_database
@@ -51,14 +52,35 @@ async def cleanup_stale_connections():
             for pc_data in stale_pcs:
                 pc_id = pc_data.get("pc_id")
                 if pc_id:
+                    # Check if PC is actively streaming (camera, microphone, or screen)
+                    is_streaming = False
+                    try:
+                        is_streaming = await streaming_service.get_pc_streaming_status(pc_id, "camera") or \
+                                      await streaming_service.get_pc_streaming_status(pc_id, "microphone") or \
+                                      await streaming_service.get_pc_streaming_status(pc_id, "screen")
+                    except:
+                        pass
+                    
+                    # If PC is streaming, keep it online (don't mark as offline)
+                    if is_streaming:
+                        logger.debug(f"PC {pc_id} is actively streaming - keeping online despite stale heartbeat")
+                        # Update last_seen to keep it online
+                        await PCService.update_last_seen(pc_id)
+                        continue
+                    
                     # Check if WebSocket is still active
                     if not manager.is_connected(pc_id):
-                        logger.info(f"Marking stale PC as offline: {pc_id} (last_seen: {pc_data.get('last_seen')})")
+                        logger.info(f"Marking stale PC as offline: {pc_id} (last_seen: {pc_data.get('last_seen')}, no active streams)")
                         await PCService.update_connection_status(pc_id, connected=False)
+                    else:
+                        # WebSocket is active but no heartbeat - update last_seen to keep it online
+                        logger.debug(f"PC {pc_id} has active WebSocket but stale heartbeat - updating last_seen")
+                        await PCService.update_last_seen(pc_id)
             
             # Also sync active WebSocket connections with DB
             for pc_id in list(manager.active_connections.keys()):
-                await manager.ensure_connection_synced(pc_id)
+                # Ensure all active WebSocket connections are marked as online
+                await PCService.update_last_seen(pc_id)
                 
         except Exception as e:
             logger.error(f"Error in cleanup_stale_connections: {e}")

@@ -335,6 +335,9 @@ async def handle_websocket_connection(websocket: WebSocket, pc_id: str):
                 
                 elif message_type == "camera_frame":
                     # PC sends camera frame (base64 encoded JPEG)
+                    # Update last_seen - streaming activity means PC is online
+                    await PCService.update_last_seen(pc_id)
+                    
                     frame_data = data.get("frame")
                     if frame_data:
                         try:
@@ -349,6 +352,9 @@ async def handle_websocket_connection(websocket: WebSocket, pc_id: str):
                 
                 elif message_type == "microphone_audio":
                     # PC sends microphone audio chunk (base64 encoded)
+                    # Update last_seen - streaming activity means PC is online
+                    await PCService.update_last_seen(pc_id)
+                    
                     audio_data = data.get("audio")
                     if audio_data:
                         try:
@@ -363,6 +369,9 @@ async def handle_websocket_connection(websocket: WebSocket, pc_id: str):
                 
                 elif message_type == "screen_frame":
                     # PC sends screen frame (base64 encoded JPEG)
+                    # Update last_seen - streaming activity means PC is online
+                    await PCService.update_last_seen(pc_id)
+                    
                     frame_data = data.get("frame")
                     if frame_data:
                         try:

@@ -109,8 +109,10 @@ class Settings(BaseSettings):
     
     # WebSocket Configuration
     # Increased timeout to handle long-running scripts (up to 5 minutes)
+    # But heartbeat should be sent every 60 seconds to keep PC online
     WS_HEARTBEAT_TIMEOUT: int = 300  # 5 minutes - enough for long scripts
     WS_PING_INTERVAL: int = 30
+    WS_HEARTBEAT_INTERVAL: int = 60  # PC should send heartbeat every 60 seconds
     
     # Server URL (from .env, used in scripts)
     # Note: .env file uses "Serverurl" (case-sensitive)
