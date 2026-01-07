@@ -107,26 +107,37 @@ class PCService:
         }
         
         if connected:
-            update_data["connected_at"] = now
+            # When setting connected to true, also set connected_at
+            # But only if it's not already set or if PC was previously disconnected
+            existing_pc = await db.pcs.find_one({"pc_id": pc_id})
+            if not existing_pc or not existing_pc.get("connected", False):
+                update_data["connected_at"] = now
         
         result = await db.pcs.find_one_and_update(
             {"pc_id": pc_id},
             {"$set": update_data},
+            upsert=True,  # Create PC if it doesn't exist
             return_document=True
         )
         
         if result:
             result["_id"] = str(result["_id"])
+            logger.debug(f"Updated connection status for {pc_id}: connected={connected}")
             return PCInDB(**result)
         return None
     
     @staticmethod
     async def update_last_seen(pc_id: str) -> Optional[PCInDB]:
-        """Update PC last seen timestamp"""
+        """Update PC last seen timestamp and ensure connected status is true"""
         db = get_database()
+        # Update both last_seen and connected status
+        # If PC is sending messages, it's definitely connected
         result = await db.pcs.find_one_and_update(
             {"pc_id": pc_id},
-            {"$set": {"last_seen": datetime.utcnow()}},
+            {"$set": {
+                "last_seen": datetime.utcnow(),
+                "connected": True  # Ensure connected is true when updating last_seen
+            }},
             return_document=True
         )
         

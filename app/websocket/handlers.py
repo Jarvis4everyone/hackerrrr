@@ -52,13 +52,16 @@ async def handle_websocket_connection(websocket: WebSocket, pc_id: str):
                     timeout=settings.WS_HEARTBEAT_TIMEOUT
                 )
                 
-                # Update last_seen
-                await PCService.update_last_seen(pc_id)
+                # Update last_seen and ensure connected status is true
+                # Any message from PC means it's connected
+                await PCService.update_connection_status(pc_id, connected=True)
                 
                 # Handle different message types from client
                 message_type = data.get("type")
                 
                 if message_type == "heartbeat":
+                    # Heartbeat received - PC is definitely connected
+                    await PCService.update_connection_status(pc_id, connected=True)
                     await websocket.send_json({"type": "heartbeat", "status": "ok"})
                 
                 elif message_type == "status":
@@ -90,6 +93,10 @@ async def handle_websocket_connection(websocket: WebSocket, pc_id: str):
                     if isinstance(metadata, dict) and "ip_address" in metadata:
                         metadata = {k: v for k, v in metadata.items() if k != "ip_address"}
                     
+                    # CRITICAL: Ensure connected status is true when receiving pc_info
+                    # This ensures PC is marked as online even if connection handler missed it
+                    await PCService.update_connection_status(pc_id, connected=True)
+                    
                     # Update PC with hostname, IP address, and other info
                     # Always update when pc_info is received (even if some fields are None)
                     updated_pc = await PCService.create_or_update_pc(
@@ -100,7 +107,10 @@ async def handle_websocket_connection(websocket: WebSocket, pc_id: str):
                         os_info=os_info,
                         metadata=metadata
                     )
-                    logger.info(f"[{pc_id}] PC info updated: hostname={hostname}, name={pc_name}, ip={final_ip_address or 'not updated'}, saved IP in DB: {updated_pc.ip_address if updated_pc else 'N/A'}")
+                    
+                    # Ensure connected is still true after update
+                    await PCService.update_connection_status(pc_id, connected=True)
+                    logger.info(f"[{pc_id}] PC info updated: hostname={hostname}, name={pc_name}, ip={final_ip_address or 'not updated'}, saved IP in DB: {updated_pc.ip_address if updated_pc else 'N/A'}, connected: {updated_pc.connected if updated_pc else 'N/A'}")
                 
                 elif message_type == "error":
                     error_msg = data.get('message', 'Unknown error')
