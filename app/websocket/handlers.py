@@ -199,9 +199,8 @@ async def handle_websocket_connection(websocket: WebSocket, pc_id: str):
                     # 4. Complete log file - After execution, sends the ENTIRE log file content as a single log message
                     # 5. Execution complete - Final message with execution status
                     #
-                    # CRITICAL: Each log message creates a NEW document in MongoDB.
-                    # Multiple logs with the same execution_id are stored as separate documents.
-                    # This allows tracking the full execution flow from start to finish.
+                    # CRITICAL: LogService.create_log() will append to existing log if execution_id exists,
+                    # or create new log if it doesn't. This ensures all logs for same execution are in one document.
                     try:
                         execution_id = data.get("execution_id")
                         script_name = data.get("script_name", "unknown")
@@ -210,12 +209,11 @@ async def handle_websocket_connection(websocket: WebSocket, pc_id: str):
                         log_file_path = data.get("log_file_path")
                         
                         # Log the received message for debugging
-                        logger.info(f"[{pc_id}] Received log message - script: {script_name}, execution_id: {execution_id}, level: {log_level}, content_length: {len(log_content)}")
+                        logger.info(f"[{pc_id}] Received log message - script: {script_name}, execution_id: {execution_id}, level: {log_level}, content_length: {len(log_content) if log_content else 0}")
                         
                         # Always store log messages - PC sends multiple logs for same execution
-                        # Each message creates a NEW document (not an update)
-                        # This ensures we capture: initial log, chunks, complete log file, etc.
-                        if log_content:  # Only store if there's actual content
+                        # LogService will append to existing log or create new one
+                        if log_content and log_content.strip():  # Only store if there's actual content
                             log_entry = LogCreate(
                                 pc_id=pc_id,
                                 script_name=script_name,
@@ -225,15 +223,16 @@ async def handle_websocket_connection(websocket: WebSocket, pc_id: str):
                                 log_level=log_level
                             )
                             
-                            # Creates a NEW document each time (uses insert_one, not find_one_and_update)
+                            # Creates new document or appends to existing one based on execution_id
                             stored_log = await LogService.create_log(log_entry)
-                            logger.info(f"[{pc_id}] Log stored successfully - ID: {stored_log.id}, script: {script_name}, execution: {execution_id}, level: {log_level}, content_length: {len(log_content)}")
+                            logger.info(f"[{pc_id}] ✓ Log stored - ID: {stored_log.id}, script: {script_name}, execution: {execution_id}, level: {log_level}, content_length: {len(log_content)}, total_length: {len(stored_log.log_content)}")
                         else:
-                            logger.warning(f"[{pc_id}] Received log message with empty content - script: {script_name}, execution_id: {execution_id}")
+                            logger.warning(f"[{pc_id}] Received log message with empty/whitespace content - script: {script_name}, execution_id: {execution_id}")
                             
                     except Exception as e:
-                        logger.error(f"[{pc_id}] Error saving log message: {e}", exc_info=True)
+                        logger.error(f"[{pc_id}] ❌ Error saving log message: {e}", exc_info=True)
                         logger.error(f"[{pc_id}] Failed log data: script_name={data.get('script_name')}, execution_id={data.get('execution_id')}, log_level={data.get('log_level')}, content_length={len(data.get('log_content', ''))}")
+                        # Don't break the connection on log errors - continue processing other messages
                 
                 elif message_type == "file_download_response":
                     # PC sends file download response
