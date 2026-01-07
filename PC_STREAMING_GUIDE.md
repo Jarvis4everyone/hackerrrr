@@ -152,11 +152,11 @@ class CameraStreamer:
                 await self.send_status("error", "Failed to open camera")
                 return
             
-            # Set camera properties for optimized performance and lower latency
-            # Much lower resolution = much smaller file size = much faster transmission
-            self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
-            self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
-            self.camera.set(cv2.CAP_PROP_FPS, 20)  # Lower FPS to reduce network load
+            # Set camera properties for high quality and clear images
+            # Higher resolution for better clarity
+            self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+            self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+            self.camera.set(cv2.CAP_PROP_FPS, 30)  # Camera FPS (not streaming FPS)
             # Reduce buffer size to minimize latency
             self.camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             
@@ -191,22 +191,18 @@ class CameraStreamer:
                 if not ret:
                     break
                 
-                # Resize frame for faster encoding and transmission
-                # Much smaller frames = much less data = much lower latency
-                frame = cv2.resize(frame, (320, 240), interpolation=cv2.INTER_LINEAR)
+                # Resize frame for high quality (1280x720 for clear images)
+                # High resolution for better clarity
+                frame = cv2.resize(frame, (1280, 720), interpolation=cv2.INTER_LINEAR)
                 
-                # Encode frame to JPEG with aggressive optimization
-                # Very low quality (40) = very small file = very fast transmission
+                # Encode frame to JPEG with high quality for clarity
+                # Higher quality (85) = clearer images
                 # Use optimized encoding parameters
                 encode_params = [
-                    cv2.IMWRITE_JPEG_QUALITY, 40,  # Very low quality for speed
+                    cv2.IMWRITE_JPEG_QUALITY, 85,  # High quality for clarity
                     cv2.IMWRITE_JPEG_OPTIMIZE, 1  # Optimize JPEG
                 ]
                 _, buffer = cv2.imencode('.jpg', frame, encode_params)
-                
-                # Skip frame if it's too large (over 30KB) to prevent network congestion
-                if len(buffer) > 30000:
-                    continue
                 
                 # Convert to base64
                 frame_b64 = base64.b64encode(buffer).decode('utf-8')
@@ -456,23 +452,18 @@ class ScreenStreamer:
                 # Convert BGRA to RGB
                 img = cv2.cvtColor(img, cv2.COLOR_BGRA2RGB)
                 
-                # Resize for faster encoding and transmission
-                # Much lower resolution = much smaller file = much lower latency
-                # Use 960x540 for good quality/speed balance (half of 1920x1080)
-                img = cv2.resize(img, (960, 540), interpolation=cv2.INTER_LINEAR)
+                # Resize for high quality (1920x1080 for full HD clarity)
+                # High resolution for better clarity
+                img = cv2.resize(img, (1920, 1080), interpolation=cv2.INTER_LINEAR)
                 
-                # Encode to JPEG with aggressive optimization
-                # Very low quality (40) = very small file = very fast transmission
+                # Encode to JPEG with high quality for clarity
+                # Higher quality (85) = clearer images
                 # Use optimized encoding parameters
                 encode_params = [
-                    cv2.IMWRITE_JPEG_QUALITY, 40,  # Very low quality for speed
+                    cv2.IMWRITE_JPEG_QUALITY, 85,  # High quality for clarity
                     cv2.IMWRITE_JPEG_OPTIMIZE, 1  # Optimize JPEG
                 ]
                 _, buffer = cv2.imencode('.jpg', img, encode_params)
-                
-                # Skip frame if it's too large (over 50KB) to prevent network congestion
-                if len(buffer) > 50000:
-                    continue
                 
                 # Convert to base64
                 frame_b64 = base64.b64encode(buffer).decode('utf-8')

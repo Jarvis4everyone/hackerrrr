@@ -110,37 +110,20 @@ const ScreenPage = () => {
         registerStopCallback('screen', stopStream)
       }
 
-      // Frame skipping: only process the latest frame to reduce latency
-      let lastFrameTime = 0
-      let pendingFrame = null
-      
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data)
           
           if (data.type === 'screen_frame') {
-            // Store latest frame, skip if we're still processing
-            const now = Date.now()
-            if (now - lastFrameTime < 50) {  // Skip if less than 50ms since last frame
-              pendingFrame = data.frame
-              return
-            }
-            
-            // Display frame immediately
+            // Display frame immediately - no queuing, no delays
+            // Since we're receiving 1 FPS, we can display each frame immediately
             if (screenRef.current && data.frame) {
-              screenRef.current.src = `data:image/jpeg;base64,${data.frame}`
-              lastFrameTime = now
-              
-              // Process any pending frame after a short delay
-              if (pendingFrame) {
-                setTimeout(() => {
-                  if (screenRef.current && pendingFrame) {
-                    screenRef.current.src = `data:image/jpeg;base64,${pendingFrame}`
-                    pendingFrame = null
-                    lastFrameTime = Date.now()
-                  }
-                }, 50)
-              }
+              // Use requestAnimationFrame for smooth display
+              requestAnimationFrame(() => {
+                if (screenRef.current) {
+                  screenRef.current.src = `data:image/jpeg;base64,${data.frame}`
+                }
+              })
             }
           } else if (data.type === 'stream_status') {
             console.log('[Screen] Stream status:', data)
