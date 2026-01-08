@@ -77,7 +77,7 @@ class ConnectionManager:
         await PCService.update_connection_status(pc_id, connected=False)
         
         if was_connected:
-            logger.info(f"[-] PC disconnected: {pc_id}")
+        logger.info(f"[-] PC disconnected: {pc_id}")
         else:
             logger.debug(f"[-] PC {pc_id} disconnect called but was not in active connections")
     

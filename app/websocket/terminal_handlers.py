@@ -24,7 +24,7 @@ async def handle_frontend_terminal(websocket: WebSocket, pc_id: str, session_id:
         
         # Store frontend connection for this session
         frontend_terminal_connections[session_id] = websocket
-        logger.info(f"[Frontend Terminal] Frontend connection stored for session {session_id}. Total connections: {len(frontend_terminal_connections)}")
+        logger.info(f"[Frontend Terminal] Frontend connection stored for session {session_id}")
         
         # Listen for messages from frontend
         while True:
@@ -81,32 +81,29 @@ frontend_terminal_connections = {}
 
 async def forward_terminal_output(pc_id: str, session_id: str, output: str, is_complete: bool = False):
     """
-    Forward terminal output from PC to frontend - optimized for batch output
+    Forward terminal output from PC to frontend
     
     Args:
         pc_id: PC ID
         session_id: Session ID
-        output: Terminal output (can be large batch of output)
+        output: Terminal output
         is_complete: Whether the command is complete
     """
     if session_id in frontend_terminal_connections:
         websocket = frontend_terminal_connections[session_id]
         try:
-            # Send immediately without any delays - use send_json for efficiency
-            # FastAPI's send_json is already optimized, no need for additional buffering
             await websocket.send_json({
                 "type": "output",
                 "output": output,
                 "is_complete": is_complete
             })
-            logger.debug(f"[Frontend Terminal] Successfully sent output to frontend for session {session_id}: {len(output)} chars")
         except Exception as e:
-            logger.error(f"[Frontend Terminal] Error forwarding output: {e}", exc_info=True)
+            logger.error(f"[Frontend Terminal] Error forwarding output: {e}")
             # Remove dead connection
             if session_id in frontend_terminal_connections:
                 del frontend_terminal_connections[session_id]
     else:
-        logger.warning(f"[Frontend Terminal] No frontend connection for session {session_id}, output not forwarded. Available sessions: {list(frontend_terminal_connections.keys())}")
+        logger.debug(f"[Frontend Terminal] No frontend connection for session {session_id}, output not forwarded")
 
 
 async def forward_terminal_error(pc_id: str, session_id: str, error: str):
