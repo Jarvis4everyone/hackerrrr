@@ -24,7 +24,7 @@ async def handle_frontend_terminal(websocket: WebSocket, pc_id: str, session_id:
         
         # Store frontend connection for this session
         frontend_terminal_connections[session_id] = websocket
-        logger.info(f"[Frontend Terminal] Frontend connection stored for session {session_id}")
+        logger.info(f"[Frontend Terminal] Frontend connection stored for session {session_id}. Total connections: {len(frontend_terminal_connections)}")
         
         # Listen for messages from frontend
         while True:
