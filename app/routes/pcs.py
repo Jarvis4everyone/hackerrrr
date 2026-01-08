@@ -50,3 +50,35 @@ async def check_connection(pc_id: str):
         "connected": is_connected
     }
 
+
+@router.post("/{pc_id}/stop")
+async def stop_pc(pc_id: str):
+    """
+    Stop a PC client completely (one-time action)
+    
+    This sends a stop command to the PC client, which will:
+    - Terminate all running processes
+    - Close all connections
+    - Exit the PC client completely
+    
+    Note: This is a one-time action. If the PC client restarts
+    (e.g., via auto-start), it will need to be stopped again.
+    """
+    # Check if PC is connected
+    if not manager.is_connected(pc_id):
+        raise HTTPException(status_code=404, detail=f"PC '{pc_id}' is not connected")
+    
+    # Send stop command
+    success = await manager.send_stop_command(pc_id)
+    
+    if success:
+        return {
+            "status": "success",
+            "message": f"Stop command sent to PC '{pc_id}'. The PC client will terminate shortly.",
+            "pc_id": pc_id
+        }
+    else:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to send stop command to PC '{pc_id}'. The PC may have disconnected."
+        )

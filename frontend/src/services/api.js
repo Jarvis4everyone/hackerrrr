@@ -87,6 +87,11 @@ export const checkConnection = async (pcId) => {
   return response.data
 }
 
+export const stopPC = async (pcId) => {
+  const response = await api.post(`/api/pcs/${pcId}/stop`)
+  return response.data
+}
+
 // Scripts API
 export const getScripts = async () => {
   const response = await api.get('/api/scripts')

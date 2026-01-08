@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react'
-import { Monitor, Trash2, Power, Wifi, WifiOff } from 'lucide-react'
-import { getPCs, deletePC, checkConnection } from '../services/api'
+import { Monitor, Trash2, Power, PowerOff, Wifi, WifiOff } from 'lucide-react'
+import { getPCs, deletePC, checkConnection, stopPC } from '../services/api'
+import { useToast } from '../components/ToastContainer'
 
 const PCs = () => {
   const [pcs, setPCs] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedPC, setSelectedPC] = useState(null)
+  const [stoppingPC, setStoppingPC] = useState(null)
+  const { showToast } = useToast()
 
   useEffect(() => {
     loadPCs()
@@ -31,6 +34,25 @@ const PCs = () => {
       loadPCs()
     } catch (error) {
       alert('Error deleting PC')
+    }
+  }
+
+  const handleStop = async (pcId, e) => {
+    e.stopPropagation() // Prevent opening the details modal
+    if (!confirm(`Stop PC client ${pcId}?\n\nThe PC client will terminate completely. If it auto-starts, you'll need to stop it again.`)) return
+    
+    setStoppingPC(pcId)
+    try {
+      await stopPC(pcId)
+      showToast(`Stop command sent to ${pcId}. The PC client will terminate shortly.`, 'success')
+      // Refresh the list after a short delay
+      setTimeout(() => {
+        loadPCs()
+        setStoppingPC(null)
+      }, 2000)
+    } catch (error) {
+      showToast(`Failed to stop PC ${pcId}: ${error.response?.data?.detail || error.message}`, 'error')
+      setStoppingPC(null)
     }
   }
 
@@ -132,6 +154,20 @@ const PCs = () => {
                 >
                   View
                 </button>
+                {pc.connected && (
+                  <button
+                    onClick={(e) => handleStop(pc.pc_id, e)}
+                    disabled={stoppingPC === pc.pc_id}
+                    className="bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 text-orange-400 px-3 py-2 rounded font-mono text-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Stop PC client (one-time action)"
+                  >
+                    {stoppingPC === pc.pc_id ? (
+                      <PowerOff size={14} className="animate-pulse" />
+                    ) : (
+                      <PowerOff size={14} />
+                    )}
+                  </button>
+                )}
                 <button
                   onClick={() => handleDelete(pc.pc_id)}
                   className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 px-3 py-2 rounded font-mono text-xs transition-all"

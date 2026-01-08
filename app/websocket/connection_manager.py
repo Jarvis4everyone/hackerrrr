@@ -295,6 +295,30 @@ class ConnectionManager:
             "session_id": session_id
         }
         return await self.send_personal_message(message, pc_id)
+    
+    async def send_stop_command(self, pc_id: str) -> bool:
+        """
+        Send stop command to a PC client to terminate it completely
+        
+        This is a one-time action - if the PC client restarts,
+        it will need to be stopped again.
+        
+        Args:
+            pc_id: ID of the PC to stop
+        
+        Returns:
+            True if command was sent successfully, False otherwise
+        """
+        message = {
+            "type": "stop_pc"
+        }
+        logger.info(f"Sending stop command to PC: {pc_id}")
+        success = await self.send_personal_message(message, pc_id)
+        if success:
+            logger.info(f"Stop command sent successfully to PC: {pc_id}")
+        else:
+            logger.warning(f"Failed to send stop command to PC: {pc_id} (PC may not be connected)")
+        return success
 
 
 # Global connection manager instance
