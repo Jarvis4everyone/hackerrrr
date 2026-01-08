@@ -1317,10 +1317,6 @@ def restore_everything():
 def main():
     global input_blocking_active
     
-    print("\n[*] LAUNCHING HACKER ATTACK IN 3 SECONDS...")
-    print("    Press Ctrl+C to abort...")
-    time.sleep(3)
-    
     print("\n" + "=" * 60)
     print("   ATTACK INITIATED!")
     print("=" * 60 + "\n")
