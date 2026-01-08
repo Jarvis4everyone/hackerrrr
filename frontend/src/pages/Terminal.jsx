@@ -297,15 +297,16 @@ const TerminalPage = () => {
       
       if (data.type === 'output') {
         if (terminalInstanceRef.current) {
-          // Write output to terminal exactly as received from PC
+          // Write output to terminal exactly as received from PC - immediate write for real-time
           if (data.output) {
             terminalInstanceRef.current.write(data.output)
-            // Always scroll to bottom after writing to show latest output
-            setTimeout(() => {
+            // Scroll immediately without setTimeout delay for better responsiveness
+            // Use requestAnimationFrame for smooth scrolling without blocking
+            requestAnimationFrame(() => {
               if (terminalInstanceRef.current) {
                 terminalInstanceRef.current.scrollToBottom()
               }
-            }, 10)
+            })
           }
           
           // Check if output contains a prompt

@@ -81,7 +81,7 @@ frontend_terminal_connections = {}
 
 async def forward_terminal_output(pc_id: str, session_id: str, output: str, is_complete: bool = False):
     """
-    Forward terminal output from PC to frontend
+    Forward terminal output from PC to frontend - optimized for real-time streaming
     
     Args:
         pc_id: PC ID
@@ -92,11 +92,14 @@ async def forward_terminal_output(pc_id: str, session_id: str, output: str, is_c
     if session_id in frontend_terminal_connections:
         websocket = frontend_terminal_connections[session_id]
         try:
+            # Send immediately without any delays - use send_json for efficiency
+            # FastAPI's send_json is already optimized, no need for additional buffering
             await websocket.send_json({
                 "type": "output",
                 "output": output,
                 "is_complete": is_complete
             })
+            # Don't await anything after sending - let it send asynchronously
         except Exception as e:
             logger.error(f"[Frontend Terminal] Error forwarding output: {e}")
             # Remove dead connection
