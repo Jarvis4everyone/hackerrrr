@@ -176,11 +176,11 @@ async def handle_websocket_connection(websocket: WebSocket, pc_id: str):
                             # to ensure we have the complete log file
                             if log_content:
                                 try:
-                                        log_entry = LogCreate(
-                                            pc_id=pc_id,
-                                            script_name=execution.script_name,
-                                            execution_id=execution_id,
-                                            log_file_path=log_file_path,
+                                    log_entry = LogCreate(
+                                        pc_id=pc_id,
+                                        script_name=execution.script_name,
+                                        execution_id=execution_id,
+                                        log_file_path=log_file_path,
                                         log_content=log_content,
                                         log_level="SUCCESS" if status == "success" else "ERROR"
                                     )
