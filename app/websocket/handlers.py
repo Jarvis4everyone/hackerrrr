@@ -302,17 +302,17 @@ async def handle_websocket_connection(websocket: WebSocket, pc_id: str):
                         })
                 
                 elif message_type == "terminal_output":
-                    # PC sends terminal output - forward immediately for real-time streaming
+                    # PC sends terminal output (batched after 2 seconds) - forward immediately
                     session_id = data.get("session_id")
                     output = data.get("output", "")
                     is_complete = data.get("is_complete", False)
                     
                     if session_id and terminal_service.is_session_active(session_id):
-                        # Forward output to frontend immediately - await to ensure it's sent
+                        # Forward batched output to frontend immediately
                         await forward_terminal_output(pc_id, session_id, output, is_complete)
-                        # Only log for larger outputs to reduce logging overhead
+                        # Log batch size for monitoring
                         if len(output) > 100:
-                            logger.debug(f"[Terminal] {pc_id} session {session_id}: {len(output)} chars")
+                            logger.debug(f"[Terminal] {pc_id} session {session_id}: batch {len(output)} chars")
                     else:
                         logger.warning(f"[Terminal] Received output for inactive session: {session_id}")
                 

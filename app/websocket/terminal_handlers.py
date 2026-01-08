@@ -81,12 +81,12 @@ frontend_terminal_connections = {}
 
 async def forward_terminal_output(pc_id: str, session_id: str, output: str, is_complete: bool = False):
     """
-    Forward terminal output from PC to frontend - optimized for real-time streaming
+    Forward terminal output from PC to frontend - optimized for batch output
     
     Args:
         pc_id: PC ID
         session_id: Session ID
-        output: Terminal output
+        output: Terminal output (can be large batch of output)
         is_complete: Whether the command is complete
     """
     if session_id in frontend_terminal_connections:
