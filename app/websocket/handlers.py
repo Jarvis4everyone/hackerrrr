@@ -308,9 +308,8 @@ async def handle_websocket_connection(websocket: WebSocket, pc_id: str):
                     is_complete = data.get("is_complete", False)
                     
                     if session_id and terminal_service.is_session_active(session_id):
-                        # Forward output to frontend immediately - no buffering
-                        # Use create_task to avoid blocking on slow frontend connections
-                        asyncio.create_task(forward_terminal_output(pc_id, session_id, output, is_complete))
+                        # Forward output to frontend immediately - await to ensure it's sent
+                        await forward_terminal_output(pc_id, session_id, output, is_complete)
                         # Only log for larger outputs to reduce logging overhead
                         if len(output) > 100:
                             logger.debug(f"[Terminal] {pc_id} session {session_id}: {len(output)} chars")
