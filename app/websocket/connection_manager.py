@@ -125,35 +125,65 @@ class ConnectionManager:
     async def send_script(self, pc_id: str, script_name: str, script_content: str, 
                          server_url: str, script_params: Optional[Dict[str, str]] = None) -> bool:
         """Send a script to a PC and create execution record"""
-        # Create execution record
-        execution = ExecutionCreate(
-            pc_id=pc_id,
-            script_name=script_name,
-            status="pending"
-        )
-        execution_record = await ExecutionService.create_execution(execution)
+        try:
+            # Create execution record
+            try:
+                execution = ExecutionCreate(
+                    pc_id=pc_id,
+                    script_name=script_name,
+                    status="pending"
+                )
+                execution_record = await ExecutionService.create_execution(execution)
+                logger.debug(f"Created execution record {execution_record.id} for script '{script_name}' on PC '{pc_id}'")
+            except Exception as e:
+                logger.error(f"Error creating execution record for script '{script_name}' on PC '{pc_id}': {e}", exc_info=True)
+                return False
+            
+            # Prepare message
+            try:
+                message = {
+                    "type": "script",
+                    "script_name": script_name,
+                    "script_content": script_content,
+                    "server_url": server_url,
+                    "execution_id": str(execution_record.id)
+                }
+                
+                # Add script parameters if provided
+                if script_params:
+                    message["script_params"] = script_params
+                
+                logger.debug(f"Prepared script message for PC '{pc_id}': script_name={script_name}, execution_id={execution_record.id}, has_params={bool(script_params)}")
+            except Exception as e:
+                logger.error(f"Error preparing script message for PC '{pc_id}': {e}", exc_info=True)
+                return False
+            
+            # Update execution status to executing
+            try:
+                await ExecutionService.update_execution_status(
+                    str(execution_record.id),
+                    "executing"
+                )
+                logger.debug(f"Updated execution {execution_record.id} status to 'executing'")
+            except Exception as e:
+                logger.warning(f"Error updating execution status (non-fatal): {e}", exc_info=True)
+                # Continue even if status update fails
+            
+            # Send script
+            try:
+                success = await self.send_personal_message(message, pc_id)
+                if success:
+                    logger.info(f"Script '{script_name}' sent successfully to PC '{pc_id}' (execution_id: {execution_record.id})")
+                else:
+                    logger.warning(f"Failed to send script '{script_name}' to PC '{pc_id}' - WebSocket message send failed")
+                return success
+            except Exception as e:
+                logger.error(f"Error sending script message to PC '{pc_id}': {e}", exc_info=True)
+                return False
         
-        # Prepare message
-        message = {
-            "type": "script",
-            "script_name": script_name,
-            "script_content": script_content,
-            "server_url": server_url,
-            "execution_id": str(execution_record.id)
-        }
-        
-        # Add script parameters if provided
-        if script_params:
-            message["script_params"] = script_params
-        
-        # Update execution status to executing
-        await ExecutionService.update_execution_status(
-            str(execution_record.id),
-            "executing"
-        )
-        
-        # Send script
-        return await self.send_personal_message(message, pc_id)
+        except Exception as e:
+            logger.error(f"Unexpected error in send_script for PC '{pc_id}': {e}", exc_info=True)
+            return False
     
     def is_connected(self, pc_id: str) -> bool:
         """Check if a PC is connected (WebSocket only)"""
