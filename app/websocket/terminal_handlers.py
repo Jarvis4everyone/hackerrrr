@@ -99,14 +99,14 @@ async def forward_terminal_output(pc_id: str, session_id: str, output: str, is_c
                 "output": output,
                 "is_complete": is_complete
             })
-            # Don't await anything after sending - let it send asynchronously
+            logger.debug(f"[Frontend Terminal] Successfully sent output to frontend for session {session_id}: {len(output)} chars")
         except Exception as e:
-            logger.error(f"[Frontend Terminal] Error forwarding output: {e}")
+            logger.error(f"[Frontend Terminal] Error forwarding output: {e}", exc_info=True)
             # Remove dead connection
             if session_id in frontend_terminal_connections:
                 del frontend_terminal_connections[session_id]
     else:
-        logger.debug(f"[Frontend Terminal] No frontend connection for session {session_id}, output not forwarded")
+        logger.warning(f"[Frontend Terminal] No frontend connection for session {session_id}, output not forwarded. Available sessions: {list(frontend_terminal_connections.keys())}")
 
 
 async def forward_terminal_error(pc_id: str, session_id: str, error: str):
