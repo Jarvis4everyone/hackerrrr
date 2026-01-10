@@ -351,34 +351,62 @@ while True:
         y = monitor['y'] + random.randint(0, max(0, monitor['height'] - 500))
         
         # Create PowerShell command to position the terminal
-        # Use /K to keep terminal open, and add pause at end of script
-        ps_cmd = '''
-$process = Start-Process cmd -ArgumentList '/K', 'color 0a && "%s" "%s" && pause' -PassThru
-Start-Sleep -Milliseconds 500
-Add-Type @"
+        # Use proper argument escaping for cmd.exe
+        # Escape the temp file path properly
+        temp_file_escaped = temp_file.replace("\\", "\\\\").replace('"', '`"')
+        
+        # Build the command string properly
+        if python_exe == 'python':
+            # If using 'python' command, it should be in PATH
+            cmd_line = f'color 0a && python "{temp_file}" && pause'
+        else:
+            # Use full path to Python executable
+            python_exe_quoted = f'"{python_exe}"' if ' ' in python_exe else python_exe
+            cmd_line = f'color 0a && {python_exe_quoted} "{temp_file}" && pause'
+        
+        # Escape for PowerShell
+        cmd_line_escaped = cmd_line.replace('"', '`"').replace('$', '`$')
+        
+        ps_cmd = f'''
+$ErrorActionPreference = "Continue"
+try {{
+    $cmdLine = "{cmd_line_escaped}"
+    $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/K", $cmdLine -PassThru -WindowStyle Normal
+    Start-Sleep -Milliseconds 500
+    
+    Add-Type @"
 using System;
 using System.Runtime.InteropServices;
-public class Win32 {
+public class Win32 {{
     [DllImport("user32.dll")]
     public static extern bool MoveWindow(IntPtr hWnd, int X, int Y, int nWidth, int nHeight, bool bRepaint);
     [DllImport("user32.dll")]
     public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-}
+}}
 "@
-$hwnd = $process.MainWindowHandle
-$maxAttempts = 10
-$attempt = 0
-while ($hwnd -eq [IntPtr]::Zero -and $attempt -lt $maxAttempts) {
-    Start-Sleep -Milliseconds 200
-    $process.Refresh()
+    
     $hwnd = $process.MainWindowHandle
-    $attempt++
-}
-if ($hwnd -ne [IntPtr]::Zero) {
-    [Win32]::ShowWindow($hwnd, 4)
-    [Win32]::MoveWindow($hwnd, %d, %d, 850, 450, $true)
-}
-''' % (python_exe_escaped, temp_file.replace("\\", "\\\\"), x, y)
+    $maxAttempts = 15
+    $attempt = 0
+    while ($hwnd -eq [IntPtr]::Zero -and $attempt -lt $maxAttempts) {{
+        Start-Sleep -Milliseconds 200
+        try {{
+            $process.Refresh()
+            $hwnd = $process.MainWindowHandle
+        }} catch {{
+            break
+        }}
+        $attempt++
+    }}
+    
+    if ($hwnd -ne [IntPtr]::Zero) {{
+        [Win32]::ShowWindow($hwnd, 4)
+        [Win32]::MoveWindow($hwnd, {x}, {y}, 850, 450, $true)
+    }}
+}} catch {{
+    Write-Host "Error launching terminal: $_"
+}}
+'''
         
         process = subprocess.Popen(
             ['powershell', '-ExecutionPolicy', 'Bypass', '-Command', ps_cmd],
