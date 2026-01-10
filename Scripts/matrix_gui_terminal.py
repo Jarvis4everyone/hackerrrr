@@ -243,14 +243,17 @@ class MatrixTerminal:
         # Alternate between rain and message
         if self.matrix_phase == "rain":
             self.draw_matrix_rain()
-            # Switch to message occasionally
-            if random.random() < 0.01:  # 1% chance per frame
+            # Switch to message occasionally (less frequent for more rain effect)
+            if random.random() < 0.005:  # 0.5% chance per frame
                 self.matrix_phase = "message"
+                self.message_display_time = time.time()
         else:
             self.draw_message()
-            # Switch back to rain after short message display
-            if random.random() < 0.05:  # 5% chance per frame
+            # Switch back to rain after 2-3 seconds of message
+            if hasattr(self, 'message_display_time') and time.time() - self.message_display_time > random.uniform(2.0, 3.0):
                 self.matrix_phase = "rain"
+            elif not hasattr(self, 'message_display_time'):
+                self.message_display_time = time.time()
         
         # Schedule next frame
         self.root.after(30, self.animate)  # ~33 FPS
