@@ -402,29 +402,34 @@ def main():
     """Main function - can be called as standalone or imported"""
     import sys
     
-    # Get parameters from command line or environment
+    # Check if we should launch multiple terminals (like old hacker_terminal.py)
+    # This is the primary mode - launch multiple terminals with parameters
+    num_terminals = os.environ.get("MATRIX_TERMINALS", None)
+    duration = os.environ.get("MATRIX_DURATION", None)
+    message = os.environ.get("MATRIX_MESSAGE", "YOUR PC HAS BEEN HACKED! CONGRATS!")
+    
+    # If MATRIX_TERMINALS is set, launch multiple terminals (like hacker_terminal.py)
+    if num_terminals:
+        try:
+            num_terminals = int(num_terminals)
+            if duration:
+                try:
+                    duration = float(duration)
+                except:
+                    duration = 15.0
+            else:
+                duration = 15.0
+            launch_multiple_terminals(num_terminals, duration, message)
+            return
+        except Exception as e:
+            print(f"[!] Error launching multiple terminals: {e}")
+            # Fall through to single terminal mode
+    
+    # Single terminal mode (for hacker_attack.py or direct calls)
     title = os.environ.get("TERMINAL_TITLE", "HACKER TERMINAL")
     flag_file = os.environ.get("TERMINAL_FLAG_FILE", None)
     duration = os.environ.get("TERMINAL_DURATION", None)
     message = os.environ.get("TERMINAL_MESSAGE", "WELCOME MR. KAUSHIK!")
-    
-    # Check if we should launch multiple terminals
-    num_terminals = os.environ.get("MATRIX_TERMINALS", None)
-    if num_terminals:
-        try:
-            num_terminals = int(num_terminals)
-            if not duration:
-                duration = os.environ.get("MATRIX_DURATION", "15")
-            try:
-                duration = float(duration)
-            except:
-                duration = 15.0
-            if not message or message == "WELCOME MR. KAUSHIK!":
-                message = os.environ.get("MATRIX_MESSAGE", "YOUR PC HAS BEEN HACKED! CONGRATS!")
-            launch_multiple_terminals(num_terminals, duration, message)
-            return
-        except:
-            pass
     
     # Parse command line arguments
     if len(sys.argv) > 1:

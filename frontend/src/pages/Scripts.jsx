@@ -58,7 +58,7 @@ const SCRIPT_DISPLAY_NAMES = {
   'matrix_rain.py': 'Matrix Rain',
   'popup_message.py': 'Popup Message',
   'remote_desktop.py': 'Remote Desktop',
-  'hacker_terminal.py': 'Hacker Terminal'
+  'matrix_gui_terminal.py': 'Matrix Terminal'
 }
 
 const Scripts = () => {
