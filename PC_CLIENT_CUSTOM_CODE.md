@@ -6,6 +6,7 @@ This document provides comprehensive guidance for PC client developers on implem
 1. **Custom Code Execution** - Running arbitrary Python code sent from the server
 2. **Connection Management** - Ensuring the server recognizes the PC as connected
 3. **Heartbeat System** - Maintaining connection status through regular heartbeats
+4. **Logging Fixes** - Preventing logging errors during script execution
 
 ## Table of Contents
 
@@ -13,7 +14,8 @@ This document provides comprehensive guidance for PC client developers on implem
 2. [Custom Code Execution](#custom-code-execution)
 3. [Message Types](#message-types)
 4. [Implementation Guide](#implementation-guide)
-5. [Troubleshooting](#troubleshooting)
+5. [Logging Fixes](#logging-fixes) ⚠️ **CRITICAL**
+6. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -363,6 +365,30 @@ Ensure your PC client:
        """Start background heartbeat task"""
        asyncio.create_task(self.send_heartbeat_loop())
    ```
+
+---
+
+## Logging Fixes
+
+### ⚠️ CRITICAL: Fix Logging Errors During Script Execution
+
+**Problem:** You may see errors like:
+```
+--- Logging error ---
+AttributeError: 'NoneType' object has no attribute 'write'
+```
+
+This happens when logging tries to write to `stdout`/`stderr` while they're redirected during script execution.
+
+**Solution:** See `PC_CLIENT_SCRIPT_EXECUTION_FIX.md` for complete implementation.
+
+**Quick Fix:**
+1. Use `SafeStreamHandler` for console logging (handles None streams)
+2. Use file logging for background tasks
+3. Disable console logging during script execution
+4. Ensure scripts never redirect `stdout`/`stderr`
+
+**See:** `PC_CLIENT_SCRIPT_EXECUTION_FIX.md` for detailed implementation.
 
 ---
 
