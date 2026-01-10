@@ -229,65 +229,44 @@ def launch_matrix_terminals():
     with open(flag_file, 'w') as f:
         f.write("1")  # Start as active
     
-    matrix_script = '''
-import random
-import time
+    # Use the GUI matrix terminal instead of cmd.exe
+    # Import the matrix_gui_terminal module
+    matrix_terminal_script = '''
+import sys
 import os
+import tempfile
 
-# Check flag file to see if attack is still active
-def is_attack_active():
-    try:
-        with open(r"%s", "r") as f:
-            return f.read().strip() == "1"
-    except:
-        return True  # Default to active if file not found
+# Set environment variables for the GUI terminal
+os.environ["MATRIX_FLAG_FILE"] = r"%s"
+os.environ["MATRIX_DURATION"] = "300"  # 5 minutes max
+os.environ["MATRIX_MESSAGE"] = "WELCOME MR. KAUSHIK!"
+os.environ["MATRIX_AUTO_CLOSE"] = "true"  # Close when flag file says to stop
 
-os.system('color 0a')
-os.system('mode con: cols=100 lines=35')
-os.system('title HACKER TERMINAL')
-
-chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%%^&*"
-width = 100
-columns = [0] * width
-
-start = time.time()
-# Run while attack is active (check flag file) - extended duration
-while is_attack_active() and (time.time() - start < 300):  # Max 5 minutes
-    line = ""
-    for i in range(width):
-        if random.random() > 0.95:
-            columns[i] = random.randint(5, 20)
-        if columns[i] > 0:
-            line += random.choice(chars)
-            columns[i] -= 1
-        else:
-            line += " "
-    print(line)
-    time.sleep(0.03)
+# Import and run the GUI terminal
+try:
+    # Try to import from the same directory
+    import matrix_gui_terminal
+    matrix_gui_terminal.main()
+except ImportError:
+    # If not found, try to find it in common locations
+    script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
+    possible_paths = [
+        os.path.join(script_dir, "matrix_gui_terminal.py"),
+        os.path.join(os.path.dirname(script_dir), "matrix_gui_terminal.py"),
+        os.path.join(tempfile.gettempdir(), "matrix_gui_terminal.py"),
+    ]
     
-    # Check flag more frequently
-    if not is_attack_active():
-        break
-
-# Keep terminal open even after attack ends
-os.system('cls')
-os.system('color 0c')
-msg = "WELCOME MR. KAUSHIK!"
-print()
-print("=" * 100)
-print()
-print(" " * 35 + msg)
-print()
-print("=" * 100)
-
-# Keep terminal alive
-while True:
-    try:
-        time.sleep(1)
-        if not is_attack_active():
+    for path in possible_paths:
+        if os.path.exists(path):
+            import importlib.util
+            spec = importlib.util.spec_from_file_location("matrix_gui_terminal", path)
+            matrix_gui_terminal = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(matrix_gui_terminal)
+            matrix_gui_terminal.main()
             break
-    except KeyboardInterrupt:
-        break
+    else:
+        print("ERROR: Could not find matrix_gui_terminal.py")
+        input("Press Enter to exit...")
 ''' % flag_file.replace("\\", "\\\\")
     
     temp_file = os.path.join(tempfile.gettempdir(), "matrix_hacker.py")

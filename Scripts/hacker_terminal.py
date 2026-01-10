@@ -17,81 +17,71 @@ print(f"[*] Duration: {duration} seconds each")
 print(f"[*] Message: {message}")
 print("[*] Launching terminals (non-blocking)...")
 
-# Create the matrix rain script that will run in each terminal
-matrix_script = f'''
-import random
-import time
-import os
+# Use GUI matrix terminal instead of cmd.exe
+# Create launcher script that uses matrix_gui_terminal.py
+script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
+matrix_gui_source = os.path.join(script_dir, "matrix_gui_terminal.py")
+if not os.path.exists(matrix_gui_source):
+    matrix_gui_source = os.path.join(os.path.dirname(script_dir), "matrix_gui_terminal.py")
+
+# Copy matrix_gui_terminal.py to temp directory
+matrix_gui_temp = os.path.join(tempfile.gettempdir(), "matrix_gui_terminal.py")
+if os.path.exists(matrix_gui_source):
+    import shutil
+    shutil.copy2(matrix_gui_source, matrix_gui_temp)
+
+# Create launcher script for each terminal
+matrix_script_template = '''
 import sys
+import os
+import tempfile
 
-# Set console to green on black
-os.system('color 0a')
-os.system('mode con: cols=100 lines=35')
+# Set environment variables for the GUI terminal
+os.environ["MATRIX_DURATION"] = "{duration}"
+os.environ["MATRIX_MESSAGE"] = "{message}"
+os.environ["MATRIX_AUTO_CLOSE"] = "true"
 
-chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%^&*"
-katakana = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン"
-all_chars = chars + katakana
-
+# Import and run the GUI terminal
 try:
-    width = os.get_terminal_size().columns
-except:
-    width = 100
-
-columns = [0] * width
-
-start = time.time()
-duration = {duration}
-
-try:
-    while time.time() - start < duration:
-        line = ""
-        for i in range(width):
-            if random.random() > 0.95:
-                columns[i] = random.randint(5, 20)
-            
-            if columns[i] > 0:
-                line += random.choice(all_chars)
-                columns[i] -= 1
-            else:
-                line += " "
+    # Try to import from temp directory
+    matrix_gui_path = os.path.join(tempfile.gettempdir(), "matrix_gui_terminal.py")
+    if os.path.exists(matrix_gui_path):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("matrix_gui_terminal", matrix_gui_path)
+        matrix_gui_terminal = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(matrix_gui_terminal)
+        matrix_gui_terminal.main()
+    else:
+        # Try to find it in script directory
+        script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
+        possible_paths = [
+            os.path.join(script_dir, "matrix_gui_terminal.py"),
+            os.path.join(os.path.dirname(script_dir), "matrix_gui_terminal.py"),
+        ]
         
-        print(line)
-        time.sleep(0.03)
-except KeyboardInterrupt:
-    pass
-
-# Show the hacked message
-os.system('cls')
-os.system('color 0c')  # Red on black
-
-message = "{message}"
-width = 100
-
-print()
-print()
-print("=" * width)
-print()
-print(" " * ((width - len(message)) // 2) + message)
-print()
-print("=" * width)
-print()
-print()
-
-# Dramatic effect
-for i in range(3):
-    time.sleep(0.3)
-    os.system('color 0a')  # Green
-    time.sleep(0.3)
-    os.system('color 0c')  # Red
-
-time.sleep(2)
-# Terminal will close automatically
+        for path in possible_paths:
+            if os.path.exists(path):
+                import importlib.util
+                spec = importlib.util.spec_from_file_location("matrix_gui_terminal", path)
+                matrix_gui_terminal = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(matrix_gui_terminal)
+                matrix_gui_terminal.main()
+                break
+        else:
+            print("ERROR: Could not find matrix_gui_terminal.py")
+            input("Press Enter to exit...")
+except Exception as e:
+    print(f"ERROR: {e}")
+    import traceback
+    traceback.print_exc()
+    input("Press Enter to exit...")
 '''
 
-# Write the script to temp files (one for each terminal to avoid conflicts)
+# Write the launcher script to temp files (one for each terminal)
 temp_files = []
 for i in range(num_terminals):
-    temp_file = os.path.join(tempfile.gettempdir(), f"matrix_rain_{i}.py")
+    temp_file = os.path.join(tempfile.gettempdir(), f"matrix_terminal_{i}.py")
+    matrix_script = matrix_script_template.format(duration=duration, message=message)
     with open(temp_file, 'w', encoding='utf-8') as f:
         f.write(matrix_script)
     temp_files.append(temp_file)
