@@ -99,8 +99,8 @@ const Code = () => {
         >
           <option value="">-- Select a PC --</option>
           {pcs.map((pc) => (
-            <option key={pc.id} value={pc.id}>
-              {pc.name} {pc.connected ? '(Online)' : '(Offline)'}
+            <option key={pc.pc_id} value={pc.pc_id}>
+              {pc.name || pc.pc_id} {pc.connected ? '(Online)' : '(Offline)'}
             </option>
           ))}
         </select>

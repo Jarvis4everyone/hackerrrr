@@ -1,12 +1,174 @@
-# PC Client Custom Code Execution Documentation
+# PC Client Custom Code Execution & Connection Management Documentation
 
 ## Overview
 
-The PC client supports executing **custom Python code** sent from the server. This feature allows the server to run any Python code on the target PC, with automatic dependency installation support.
+This document provides comprehensive guidance for PC client developers on implementing:
+1. **Custom Code Execution** - Running arbitrary Python code sent from the server
+2. **Connection Management** - Ensuring the server recognizes the PC as connected
+3. **Heartbeat System** - Maintaining connection status through regular heartbeats
 
-## Message Format
+## Table of Contents
 
-When the server sends custom code for execution, the PC client receives a WebSocket message with the following format:
+1. [Connection Management](#connection-management)
+2. [Custom Code Execution](#custom-code-execution)
+3. [Message Types](#message-types)
+4. [Implementation Guide](#implementation-guide)
+5. [Troubleshooting](#troubleshooting)
+
+---
+
+## Connection Management
+
+### Critical: PC ID vs MongoDB ObjectId
+
+**IMPORTANT**: The server uses **`pc_id`** (the PC identifier, e.g., "ShreshthKaushik") to identify PCs, NOT the MongoDB `_id` (ObjectId like "6956efe211c9b833c46f31bd").
+
+- ✅ **Correct**: Use `pc_id` = "ShreshthKaushik" (hostname or custom ID)
+- ❌ **Wrong**: Use MongoDB `_id` = "6956efe211c9b833c46f31bd"
+
+### Connection Status Requirements
+
+For the server to recognize your PC as connected, you **MUST**:
+
+1. **Connect via WebSocket** using your `pc_id`:
+   ```python
+   # Connect to: wss://server.com/ws/{pc_id}
+   # Example: wss://hackerrrr-backend.onrender.com/ws/ShreshthKaushik
+   ```
+
+2. **Send `pc_info` message immediately after connection**:
+   ```python
+   await websocket.send_json({
+       "type": "pc_info",
+       "hostname": "ShreshthKaushik",  # Your PC's hostname
+       "name": "ShreshthKaushik",      # Display name
+       "ip_address": "192.168.1.53",  # Your PC's IP address
+       "metadata": {
+           "processor": "Intel Core i7",
+           # ... other hardware info
+       }
+   })
+   ```
+
+3. **Send heartbeats every 5 seconds**:
+   ```python
+   # In a background task:
+   while True:
+       await asyncio.sleep(5)  # Every 5 seconds
+       await websocket.send_json({
+           "type": "heartbeat"
+       })
+   ```
+
+### Heartbeat System
+
+The heartbeat system is **CRITICAL** for maintaining connection status:
+
+- **Frequency**: Send a heartbeat every **5 seconds**
+- **Message Format**:
+  ```json
+  {
+    "type": "heartbeat"
+  }
+  ```
+- **Purpose**: 
+  - Updates `last_seen` timestamp in database
+  - Keeps `connected` status as `true`
+  - Allows server to detect if PC goes offline
+
+**Implementation Example**:
+```python
+async def send_heartbeat_loop(self):
+    """Background task to send heartbeats every 5 seconds"""
+    while self.running:
+        try:
+            if self.websocket and not self.websocket.closed:
+                await self.websocket.send_json({"type": "heartbeat"})
+                logger.debug("Heartbeat sent")
+            else:
+                logger.warning("Cannot send heartbeat - WebSocket not connected")
+        except Exception as e:
+            logger.error(f"Error sending heartbeat: {e}")
+        
+        await asyncio.sleep(5)  # Wait 5 seconds before next heartbeat
+```
+
+### PC Info Message
+
+The `pc_info` message should be sent:
+1. **Immediately after WebSocket connection** is established
+2. **Whenever PC information changes** (IP address, hostname, etc.)
+
+**Complete PC Info Message Example**:
+```python
+async def send_pc_info(self):
+    """Send PC information to server"""
+    import socket
+    import platform
+    
+    # Detect IP address
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip_address = s.getsockname()[0]
+        s.close()
+    except:
+        ip_address = "unknown"
+    
+    # Get hostname
+    hostname = socket.gethostname()
+    
+    # Prepare metadata
+    metadata = {
+        "processor": platform.processor(),
+        "platform": platform.system(),
+        "python_version": platform.python_version()
+    }
+    
+    # Send pc_info message
+    await self.websocket.send_json({
+        "type": "pc_info",
+        "hostname": hostname,
+        "name": hostname,  # Or use a custom name
+        "ip_address": ip_address,
+        "os_info": {
+            "system": platform.system(),
+            "release": platform.release(),
+            "version": platform.version()
+        },
+        "metadata": metadata
+    })
+    
+    logger.info(f"Sent PC info: hostname={hostname}, ip={ip_address}")
+```
+
+### Connection Status Verification
+
+To verify your PC is recognized as connected:
+
+1. **Check server logs** - Look for:
+   ```
+   [+] PC connected: ShreshthKaushik
+   [ShreshthKaushik] PC info updated: connected: True
+   ```
+
+2. **Check database** - The server updates `connected: true` when:
+   - WebSocket connection is established
+   - `pc_info` message is received
+   - `heartbeat` message is received
+
+3. **Common Issues**:
+   - ❌ **PC not recognized**: Not sending `pc_info` or heartbeats
+   - ❌ **Wrong PC ID**: Using MongoDB `_id` instead of `pc_id`
+   - ❌ **Connection lost**: WebSocket closed but heartbeats still being sent
+
+---
+
+## Custom Code Execution
+
+### Message Format
+
+When the server sends custom code for execution, the PC client receives a WebSocket message:
 
 ```json
 {
@@ -20,40 +182,38 @@ When the server sends custom code for execution, the PC client receives a WebSoc
 
 ### Message Fields
 
-- **`type`** (required): Must be `"custom_code"` to identify this message type
-- **`code`** (required): The Python code to execute (as a string)
-- **`requirements`** (optional): pip install commands to run before executing the code
-  - Can be a single command: `"pip install pyqt5"`
-  - Or multiple commands separated by newlines: `"pip install pyqt5\npip install requests"`
-- **`server_url`** (required): HTTP URL of the server (for sending results back)
+- **`type`** (required): Must be `"custom_code"`
+- **`code`** (required): Python code to execute (as a string)
+- **`requirements`** (optional): pip install commands
+  - Single: `"pip install pyqt5"`
+  - Multiple: `"pip install pyqt5\npip install requests"`
+- **`server_url`** (required): HTTP URL of the server
 - **`execution_id`** (required): Unique identifier for this execution
+
+---
 
 ## Implementation Guide
 
 ### Step 1: Handle the Message Type
 
-In your PC client's message handler, add a case for `custom_code`:
+Add a case for `custom_code` in your message handler:
 
 ```python
 async def handle_message(self, message: dict):
+    """Handle incoming WebSocket messages"""
     message_type = message.get("type")
     
     if message_type == "custom_code":
         await self.handle_custom_code(message)
     elif message_type == "script":
-        # Existing script handler
-        ...
+        await self.handle_script(message)
+    elif message_type == "heartbeat":
+        # Server response to heartbeat - no action needed
+        pass
     # ... other message types
 ```
 
 ### Step 2: Implement Custom Code Handler
-
-Create a handler method that:
-
-1. **Installs requirements** (if provided)
-2. **Executes the code**
-3. **Captures output** (stdout/stderr)
-4. **Sends results back** to the server
 
 ```python
 async def handle_custom_code(self, message: dict):
@@ -79,34 +239,31 @@ async def handle_custom_code(self, message: dict):
     if requirements and requirements.strip():
         logger.info(f"[Custom Code] Installing requirements: {requirements}")
         try:
-            # Split requirements by newlines to handle multiple pip install commands
             req_lines = [line.strip() for line in requirements.strip().split('\n') if line.strip()]
             
             for req_line in req_lines:
                 if req_line.startswith('pip install'):
-                    # Extract package names (handle "pip install package1 package2")
                     cmd = req_line.split()
                     if len(cmd) >= 3:
-                        # Run pip install command
                         result = subprocess.run(
                             cmd,
                             capture_output=True,
                             text=True,
-                            timeout=300  # 5 minute timeout for installations
+                            timeout=300  # 5 minute timeout
                         )
                         if result.returncode == 0:
                             logger.info(f"[Custom Code] Successfully installed: {req_line}")
                         else:
                             logger.warning(f"[Custom Code] Installation warning: {result.stderr}")
                 else:
-                    logger.warning(f"[Custom Code] Skipping invalid requirement line: {req_line}")
+                    logger.warning(f"[Custom Code] Skipping invalid requirement: {req_line}")
         except Exception as e:
             logger.error(f"[Custom Code] Error installing requirements: {e}")
-            # Continue with code execution even if requirements fail
+            # Continue with execution even if requirements fail
     
     # Step 2: Execute the code
     try:
-        # Create a temporary file for the code
+        # Create temporary file
         with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as f:
             f.write(code)
             temp_script = f.name
@@ -121,9 +278,9 @@ async def handle_custom_code(self, message: dict):
             sys.stdout = stdout_capture
             sys.stderr = stderr_capture
             
-            # Set environment variables (same as script execution)
+            # Set environment variables
             os.environ['SERVER_URL'] = server_url
-            os.environ['PC_ID'] = self.pc_id
+            os.environ['PC_ID'] = self.pc_id  # Your PC ID
             os.environ['EXECUTION_ID'] = execution_id
             
             # Execute the code
@@ -139,16 +296,17 @@ async def handle_custom_code(self, message: dict):
             stdout_content = stdout_capture.getvalue()
             stderr_content = stderr_capture.getvalue()
             
-            logger.info(f"[Custom Code] Execution completed successfully (ID: {execution_id})")
+            logger.info(f"[Custom Code] Execution completed (ID: {execution_id})")
             
-            # Send success message back to server
+            # Send success message
             await self.send_message({
                 "type": "execution_complete",
                 "execution_id": execution_id,
                 "status": "success",
                 "script_name": "custom_code.py",
                 "output": stdout_content,
-                "error": stderr_content
+                "error": stderr_content,
+                "return_code": 0
             })
             
         finally:
@@ -168,163 +326,210 @@ async def handle_custom_code(self, message: dict):
         error_traceback = traceback.format_exc()
         
         logger.error(f"[Custom Code] Execution failed (ID: {execution_id}): {error_msg}")
-        logger.error(f"[Custom Code] Traceback: {error_traceback}")
         
-        # Send error message back to server
+        # Send error message
         await self.send_message({
             "type": "execution_complete",
             "execution_id": execution_id,
             "status": "error",
             "script_name": "custom_code.py",
-            "error": f"{error_msg}\n\n{error_traceback}"
+            "error": f"{error_msg}\n\n{error_traceback}",
+            "return_code": -1
         })
 ```
 
-### Step 3: Send Logs (Optional but Recommended)
+### Step 3: Complete Connection Setup
 
-To send execution logs to the server (similar to script execution), you can also send a log message:
+Ensure your PC client:
+
+1. **Connects with correct PC ID**:
+   ```python
+   # Use hostname or custom PC ID
+   self.pc_id = socket.gethostname()  # e.g., "ShreshthKaushik"
+   uri = f"wss://{server_url}/ws/{self.pc_id}"
+   ```
+
+2. **Sends pc_info immediately after connection**:
+   ```python
+   async def on_connect(self):
+       """Called when WebSocket connection is established"""
+       await self.send_pc_info()  # Send immediately
+       await self.start_heartbeat_loop()  # Start heartbeat background task
+   ```
+
+3. **Maintains heartbeat loop**:
+   ```python
+   async def start_heartbeat_loop(self):
+       """Start background heartbeat task"""
+       asyncio.create_task(self.send_heartbeat_loop())
+   ```
+
+---
+
+## Troubleshooting
+
+### Issue: Server says "PC not connected" but PC is online
+
+**Symptoms**:
+- PC client is running and connected
+- Heartbeats are being sent every 5 seconds
+- Server logs show: `PC 'ShreshthKaushik' is not connected`
+
+**Solutions**:
+
+1. **Verify PC ID matches**:
+   - Check WebSocket URI: `wss://server/ws/ShreshthKaushik`
+   - Ensure `pc_id` in messages matches WebSocket path
+   - **DO NOT** use MongoDB `_id` - use `pc_id` (hostname)
+
+2. **Verify heartbeats are being sent**:
+   ```python
+   # Add logging to heartbeat function
+   logger.info(f"Sending heartbeat - PC ID: {self.pc_id}")
+   await websocket.send_json({"type": "heartbeat"})
+   ```
+
+3. **Verify pc_info was sent**:
+   - Check server logs for: `[ShreshthKaushik] PC info updated: connected: True`
+   - Send `pc_info` again if connection was lost and re-established
+
+4. **Check WebSocket connection**:
+   - Ensure WebSocket is not closed
+   - Handle reconnection properly
+   - Re-send `pc_info` after reconnection
+
+### Issue: Custom code execution fails
+
+**Check**:
+1. Requirements installation succeeded
+2. Code syntax is valid
+3. Environment variables are set
+4. Output is being captured correctly
+
+### Issue: Connection lost frequently
+
+**Solutions**:
+1. Implement automatic reconnection
+2. Re-send `pc_info` after reconnection
+3. Restart heartbeat loop after reconnection
+4. Handle WebSocket errors gracefully
+
+---
+
+## Complete Example
 
 ```python
-# After execution completes, send log
-log_content = f"=== Custom Code Execution ===\n"
-log_content += f"Execution ID: {execution_id}\n"
-log_content += f"Status: {'Success' if success else 'Error'}\n\n"
-log_content += f"=== STDOUT ===\n{stdout_content}\n\n"
-if stderr_content:
-    log_content += f"=== STDERR ===\n{stderr_content}\n\n"
-if error_msg:
-    log_content += f"=== ERROR ===\n{error_msg}\n"
-
-await self.send_message({
-    "type": "log",
-    "execution_id": execution_id,
-    "script_name": "custom_code.py",
-    "log_content": log_content,
-    "log_level": "INFO" if success else "ERROR"
-})
-```
-
-## Important Considerations
-
-### 1. Requirements Installation
-
-- **Timeout**: Set a reasonable timeout (e.g., 5 minutes) for pip install commands
-- **Error Handling**: Continue with code execution even if requirements installation fails
-- **Multiple Commands**: Support multiple pip install commands separated by newlines
-- **Security**: Be cautious about executing arbitrary pip install commands
-
-### 2. Code Execution
-
-- **Environment Variables**: Set `SERVER_URL`, `PC_ID`, and `EXECUTION_ID` before execution
-- **Output Capture**: Capture both stdout and stderr
-- **Error Handling**: Catch all exceptions and send error details back to server
-- **Cleanup**: Always clean up temporary files, even on error
-
-### 3. Security
-
-- **Sandboxing**: Consider running custom code in a sandboxed environment if possible
-- **Resource Limits**: Consider setting timeouts and resource limits for code execution
-- **Validation**: Validate code before execution (optional, for advanced implementations)
-
-### 4. Async Operations
-
-If the custom code uses async operations, follow the pattern from `SERVER_SCRIPT_DEVELOPMENT_GUIDE.md`:
-
-```python
-# In the code execution handler, if code uses async:
 import asyncio
+import websockets
+import json
+import socket
+import platform
+import logging
 
-# Create a new event loop for the code
-loop = asyncio.new_event_loop()
-asyncio.set_event_loop(loop)
-try:
-    # Execute async code
-    result = loop.run_until_complete(async_function())
-finally:
-    loop.close()
-```
+logger = logging.getLogger(__name__)
 
-## Example: Complete Implementation
-
-Here's a complete example that integrates with an existing PC client:
-
-```python
 class PCClient:
-    # ... existing code ...
+    def __init__(self, server_url: str, pc_id: str):
+        self.server_url = server_url
+        self.pc_id = pc_id  # Use hostname or custom ID
+        self.websocket = None
+        self.running = False
+    
+    async def connect(self):
+        """Connect to server and maintain connection"""
+        uri = f"wss://{self.server_url}/ws/{self.pc_id}"
+        
+        while True:
+            try:
+                logger.info(f"Connecting to {uri}...")
+                async with websockets.connect(uri) as websocket:
+                    self.websocket = websocket
+                    self.running = True
+                    
+                    # Send PC info immediately
+                    await self.send_pc_info()
+                    
+                    # Start heartbeat loop
+                    heartbeat_task = asyncio.create_task(self.send_heartbeat_loop())
+                    
+                    # Listen for messages
+                    async for message in websocket:
+                        data = json.loads(message)
+                        await self.handle_message(data)
+                        
+            except Exception as e:
+                logger.error(f"Connection error: {e}")
+                self.running = False
+                await asyncio.sleep(5)  # Wait before reconnecting
+    
+    async def send_pc_info(self):
+        """Send PC information to server"""
+        # ... (implementation from above)
+        pass
+    
+    async def send_heartbeat_loop(self):
+        """Send heartbeats every 5 seconds"""
+        while self.running:
+            try:
+                if self.websocket and not self.websocket.closed:
+                    await self.websocket.send(json.dumps({"type": "heartbeat"}))
+                await asyncio.sleep(5)
+            except Exception as e:
+                logger.error(f"Heartbeat error: {e}")
+                break
     
     async def handle_message(self, message: dict):
-        """Handle incoming WebSocket messages"""
+        """Handle incoming messages"""
         message_type = message.get("type")
         
         if message_type == "custom_code":
             await self.handle_custom_code(message)
-        elif message_type == "script":
-            await self.handle_script(message)
         # ... other handlers
     
     async def handle_custom_code(self, message: dict):
-        """Execute custom Python code with optional requirements"""
-        # Implementation from Step 2 above
-        ...
+        """Handle custom code execution"""
+        # ... (implementation from above)
+        pass
+
+# Usage
+if __name__ == "__main__":
+    pc_id = socket.gethostname()  # Use hostname as PC ID
+    client = PCClient("hackerrrr-backend.onrender.com", pc_id)
+    asyncio.run(client.connect())
 ```
 
-## Testing
-
-To test the custom code execution:
-
-1. **Simple Test**:
-   ```python
-   # Code:
-   print("Hello from custom code!")
-   import sys
-   print(f"Python version: {sys.version}")
-   ```
-
-2. **With Requirements**:
-   ```python
-   # Requirements:
-   pip install requests
-   
-   # Code:
-   import requests
-   print("Requests library imported successfully!")
-   ```
-
-3. **Error Handling Test**:
-   ```python
-   # Code:
-   raise ValueError("This is a test error")
-   ```
+---
 
 ## Integration Checklist
 
-- [ ] Add `custom_code` message type handler
-- [ ] Implement requirements installation (pip install)
-- [ ] Implement code execution with output capture
-- [ ] Send execution results back to server
-- [ ] Send logs to server (optional)
-- [ ] Handle errors gracefully
-- [ ] Clean up temporary files
-- [ ] Set environment variables (SERVER_URL, PC_ID, EXECUTION_ID)
-- [ ] Test with simple code
-- [ ] Test with requirements
-- [ ] Test error handling
+### Connection Management
+- [ ] WebSocket connects using `pc_id` (hostname), not MongoDB `_id`
+- [ ] `pc_info` message sent immediately after connection
+- [ ] Heartbeat sent every 5 seconds
+- [ ] Reconnection logic implemented
+- [ ] `pc_info` re-sent after reconnection
 
-## Server-Side Integration
+### Custom Code Execution
+- [ ] `custom_code` message type handler implemented
+- [ ] Requirements installation (pip install) works
+- [ ] Code execution with output capture
+- [ ] Execution results sent back to server
+- [ ] Error handling implemented
+- [ ] Environment variables set (SERVER_URL, PC_ID, EXECUTION_ID)
 
-The server sends custom code via:
-- **Endpoint**: `POST /api/code/execute`
-- **WebSocket Message**: `{"type": "custom_code", ...}`
+### Testing
+- [ ] PC appears as "connected" on server
+- [ ] Heartbeats update `last_seen` timestamp
+- [ ] Custom code execution works
+- [ ] Requirements installation works
+- [ ] Error handling works correctly
 
-The PC client should respond with:
-- **Success**: `{"type": "execution_complete", "status": "success", ...}`
-- **Error**: `{"type": "execution_complete", "status": "error", ...}`
+---
 
 ## Notes
 
-- Custom code execution follows the same pattern as script execution
-- All output (print statements, errors) is captured and sent to the server
-- Requirements are installed **before** code execution
-- The execution is tracked with an `execution_id` for logging and monitoring
-- Custom code has access to the same environment variables as regular scripts
-
+- **PC ID**: Always use `pc_id` (hostname or custom identifier), never MongoDB `_id`
+- **Heartbeats**: Critical for maintaining connection status - send every 5 seconds
+- **pc_info**: Must be sent immediately after connection and after reconnection
+- **Connection Status**: Server checks both WebSocket state and database `connected` field
+- **Reconnection**: Always re-send `pc_info` after reconnecting
