@@ -122,6 +122,17 @@ export const broadcastScript = async (scriptName, serverUrl = null, scriptParams
   return response.data
 }
 
+// Code Execution API
+export const executeCode = async (pcId, code, requirements = null, serverUrl = null) => {
+  const response = await api.post('/api/code/execute', {
+    pc_id: pcId,
+    code: code,
+    requirements: requirements,
+    server_url: serverUrl
+  })
+  return response.data
+}
+
 // Executions API
 export const getExecutions = async (limit = 100) => {
   const response = await api.get('/api/executions', {

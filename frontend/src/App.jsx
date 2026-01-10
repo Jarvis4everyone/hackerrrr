@@ -14,6 +14,7 @@ import Terminal from './pages/Terminal'
 import Camera from './pages/Camera'
 import Microphone from './pages/Microphone'
 import Screen from './pages/Screen'
+import Code from './pages/Code'
 
 function App() {
   return (
@@ -32,6 +33,7 @@ function App() {
                       <Route path="/" element={<Dashboard />} />
                       <Route path="/pcs" element={<PCs />} />
                       <Route path="/scripts" element={<Scripts />} />
+                      <Route path="/code" element={<Code />} />
                         <Route path="/directory" element={<Directory />} />
                         <Route path="/terminal" element={<Terminal />} />
                       <Route path="/camera" element={<Camera />} />

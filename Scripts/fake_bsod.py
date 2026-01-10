@@ -133,8 +133,8 @@ def create_bsod():
                 bg='#0078D7'  # BSOD blue background
             )
             qr_label.image = qr_photo  # Keep a reference to prevent garbage collection
-            # Place QR code on the left side, below the main content
-            qr_label.place(relx=0.08, rely=0.75, anchor='nw')
+            # Place QR code on the left side of screen, below the main content
+            qr_label.place(relx=0.05, rely=0.75, anchor='nw')
             print("[*] QR code displayed successfully")
         except Exception as e:
             print(f"[!] Error creating QR code: {e}")
@@ -142,7 +142,7 @@ def create_bsod():
             traceback.print_exc()
             # Fallback to white square if QR code generation fails
             qr_frame = tk.Frame(root, bg='white', width=200, height=200)
-            qr_frame.place(relx=0.08, rely=0.75, anchor='nw')
+            qr_frame.place(relx=0.05, rely=0.75, anchor='nw')
             qr_frame.pack_propagate(False)
     else:
         # Fallback: white square placeholder if libraries not available
@@ -151,10 +151,11 @@ def create_bsod():
         if not PIL_AVAILABLE:
             print("[!] PIL/Pillow not installed - install with: pip install Pillow")
         qr_frame = tk.Frame(root, bg='white', width=200, height=200)
-        qr_frame.place(relx=0.08, rely=0.75, anchor='nw')
+        qr_frame.place(relx=0.05, rely=0.75, anchor='nw')
         qr_frame.pack_propagate(False)
     
     # Stop code info - place to the right of QR code, aligned with QR code top
+    # QR code is at 5% from left, 200px wide, so text starts around 25% from left
     stop_code = tk.Label(
         root,
         text="For more information about this issue and possible fixes, visit\nhttps://www.windows.com/stopcode\n\nIf you call a support person, give them this info:\nStop code: CRITICAL_PROCESS_DIED",
@@ -163,9 +164,9 @@ def create_bsod():
         bg='#0078D7',
         justify='left'
     )
-    # Position text to the right of QR code (QR is 200px wide + 8% from left = ~15% + 200px)
-    # Use 0.35 (35% from left) to ensure it's well to the right of the QR code
-    stop_code.place(relx=0.35, rely=0.75, anchor='nw')
+    # Position text to the right of QR code (QR is at 5% from left, 200px wide)
+    # Text starts at ~25% from left to be right of QR code but still on left side of screen
+    stop_code.place(relx=0.25, rely=0.75, anchor='nw')
     
     # Animation and timer variables
     start_time = time.time()

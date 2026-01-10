@@ -13,7 +13,8 @@ import {
   ScreenShare,
   Menu,
   X,
-  LogOut
+  LogOut,
+  Code2
 } from 'lucide-react'
 
 const Layout = ({ children }) => {
@@ -31,6 +32,7 @@ const Layout = ({ children }) => {
     { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/pcs', icon: Monitor, label: 'PCs' },
     { path: '/scripts', icon: FileCode, label: 'Scripts' },
+    { path: '/code', icon: Code2, label: 'Code' },
     { path: '/directory', icon: Folder, label: 'Directory' },
     { path: '/terminal', icon: Terminal, label: 'Terminal' },
     { path: '/camera', icon: Camera, label: 'Camera' },

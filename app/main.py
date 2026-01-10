@@ -11,7 +11,7 @@ import logging
 
 from app.config import settings, PROJECT_ROOT, PROJECT_ROOT
 from app.database import connect_to_mongo, close_mongo_connection
-from app.routes import pcs, scripts, executions, health
+from app.routes import pcs, scripts, executions, health, code
 from app.websocket.handlers import handle_websocket_connection
 from app.services.script_service import ScriptService
 
@@ -147,6 +147,7 @@ from app.routes import auth
 app.include_router(auth.router)
 app.include_router(pcs.router)
 app.include_router(scripts.router)
+app.include_router(code.router)
 app.include_router(executions.router)
 
 # Import and include logs router

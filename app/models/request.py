@@ -19,3 +19,10 @@ class BroadcastScriptRequest(BaseModel):
     server_url: Optional[str] = None
     script_params: Optional[Dict[str, str]] = None  # Script parameters
 
+
+class ExecuteCodeRequest(BaseModel):
+    """Request model for executing custom Python code"""
+    pc_id: str
+    code: str  # Python code to execute
+    requirements: Optional[str] = None  # pip install commands (e.g., "pip install pyqt5")
+    server_url: Optional[str] = None
