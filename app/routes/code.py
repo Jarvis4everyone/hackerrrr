@@ -53,10 +53,16 @@ async def execute_code(request: ExecuteCodeRequest):
             logger.error(f"Error syncing connection status for PC '{pc_id}': {e}", exc_info=True)
             raise HTTPException(status_code=500, detail=f"Error checking PC connection: {str(e)}")
         
-        # Only proceed if WebSocket connection is actually active
+        # Only proceed if PC is connected (either via WebSocket or database shows connected)
         if not is_ws_connected:
-            logger.warning(f"PC '{pc_id}' is not connected (WebSocket connection not active)")
-            raise HTTPException(status_code=404, detail=f"PC '{pc_id}' is not connected")
+            # Check database one more time - PC might be connected but WebSocket check failed
+            pc = await PCService.get_pc(pc_id)
+            if not pc or not pc.connected:
+                logger.warning(f"PC '{pc_id}' is not connected (WebSocket and DB both show disconnected)")
+                raise HTTPException(status_code=404, detail=f"PC '{pc_id}' is not connected. Please ensure the PC client is running and connected.")
+            else:
+                # DB says connected - trust it and proceed
+                logger.info(f"PC '{pc_id}' WebSocket check failed but DB shows connected - proceeding")
         
         # Use Serverurl from .env if not provided, fallback to default
         try:

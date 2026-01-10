@@ -190,19 +190,10 @@ class ConnectionManager:
         if pc_id not in self.active_connections:
             return False
         
-        # Verify the WebSocket is still valid
-        websocket = self.active_connections[pc_id]
-        try:
-            # Check if WebSocket is still open by checking its state
-            # FastAPI WebSocket has a client_state attribute
-            if hasattr(websocket, 'client_state'):
-                # If client_state is None or DISCONNECTED, connection is dead
-                if websocket.client_state is None:
-                    return False
-            return True
-        except:
-            # If we can't check, assume it's disconnected
-            return False
+        # If PC is in active_connections, consider it connected
+        # The WebSocket handler will remove it from active_connections on disconnect
+        # This is more reliable than checking client_state which may not be available
+        return True
     
     def get_connection(self, pc_id: str) -> Optional[WebSocket]:
         """Get WebSocket connection for a PC"""
@@ -220,11 +211,14 @@ class ConnectionManager:
             await PCService.update_connection_status(pc_id, connected=True)
             return True
         
-        # If DB says connected but WebSocket says not, update DB
+        # If DB says connected but WebSocket says not, trust the DB
+        # This handles cases where PC is sending heartbeats (updating DB) but WebSocket state check fails
+        # If PC is sending heartbeats, it's definitely connected, so trust the DB
         if not is_ws_connected and is_db_connected:
-            logger.info(f"Syncing connection status for {pc_id}: WebSocket=False, DB=True -> updating DB")
-            await PCService.update_connection_status(pc_id, connected=False)
-            return False
+            logger.info(f"Syncing connection status for {pc_id}: WebSocket=False, DB=True -> trusting DB (PC sending heartbeats)")
+            # Don't update DB to False - trust that heartbeats are keeping it alive
+            # Return True to allow operations to proceed
+            return True
         
         return is_ws_connected
     
