@@ -350,29 +350,41 @@ while True:
         x = monitor['x'] + random.randint(0, max(0, monitor['width'] - 850))
         y = monitor['y'] + random.randint(0, max(0, monitor['height'] - 500))
         
-        # Create PowerShell command to position the terminal
-        # Use proper argument escaping for cmd.exe
-        # Escape the temp file path properly
-        temp_file_escaped = temp_file.replace("\\", "\\\\").replace('"', '`"')
+        # Create a batch file that will execute the Python script
+        # This is more reliable than trying to pass complex commands through PowerShell
+        batch_file = os.path.join(tempfile.gettempdir(), f"matrix_terminal_{i}.bat")
+        try:
+            with open(batch_file, 'w', encoding='utf-8') as f:
+                f.write('@echo off\n')
+                f.write('color 0a\n')
+                f.write('title HACKER TERMINAL\n')
+                f.write('mode con: cols=100 lines=35\n')
+                if python_exe == 'python':
+                    f.write(f'python "{temp_file}"\n')
+                else:
+                    # Escape quotes in Python path if needed for batch file
+                    python_path_escaped = python_exe.replace('"', '""')
+                    f.write(f'"{python_path_escaped}" "{temp_file}"\n')
+                f.write('if errorlevel 1 (\n')
+                f.write('    echo.\n')
+                f.write('    echo [ERROR] Failed to execute Python script\n')
+                f.write('    echo Python path: {}\n'.format(python_exe.replace('"', '')))
+                f.write('    echo Script path: {}\n'.format(temp_file))
+                f.write('    pause\n')
+                f.write(')\n')
+                f.write('pause\n')
+        except Exception as e:
+            print(f"    [!] Error creating batch file: {e}")
+            continue
         
-        # Build the command string properly
-        if python_exe == 'python':
-            # If using 'python' command, it should be in PATH
-            cmd_line = f'color 0a && python "{temp_file}" && pause'
-        else:
-            # Use full path to Python executable
-            python_exe_quoted = f'"{python_exe}"' if ' ' in python_exe else python_exe
-            cmd_line = f'color 0a && {python_exe_quoted} "{temp_file}" && pause'
-        
-        # Escape for PowerShell
-        cmd_line_escaped = cmd_line.replace('"', '`"').replace('$', '`$')
-        
+        # Use PowerShell to launch cmd.exe with the batch file and position the window
+        batch_file_escaped = batch_file.replace("\\", "\\\\").replace('"', '`"')
         ps_cmd = f'''
 $ErrorActionPreference = "Continue"
 try {{
-    $cmdLine = "{cmd_line_escaped}"
-    $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/K", $cmdLine -PassThru -WindowStyle Normal
-    Start-Sleep -Milliseconds 500
+    # Launch cmd.exe with the batch file
+    $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/K", "{batch_file_escaped}" -PassThru -WindowStyle Normal
+    Start-Sleep -Milliseconds 800
     
     Add-Type @"
 using System;
@@ -382,14 +394,16 @@ public class Win32 {{
     public static extern bool MoveWindow(IntPtr hWnd, int X, int Y, int nWidth, int nHeight, bool bRepaint);
     [DllImport("user32.dll")]
     public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    [DllImport("user32.dll")]
+    public static extern bool SetForegroundWindow(IntPtr hWnd);
 }}
 "@
     
     $hwnd = $process.MainWindowHandle
-    $maxAttempts = 15
+    $maxAttempts = 20
     $attempt = 0
     while ($hwnd -eq [IntPtr]::Zero -and $attempt -lt $maxAttempts) {{
-        Start-Sleep -Milliseconds 200
+        Start-Sleep -Milliseconds 300
         try {{
             $process.Refresh()
             $hwnd = $process.MainWindowHandle
@@ -401,7 +415,10 @@ public class Win32 {{
     
     if ($hwnd -ne [IntPtr]::Zero) {{
         [Win32]::ShowWindow($hwnd, 4)
+        [Win32]::SetForegroundWindow($hwnd)
         [Win32]::MoveWindow($hwnd, {x}, {y}, 850, 450, $true)
+    }} else {{
+        Write-Host "Warning: Could not get window handle for terminal {i+1}"
     }}
 }} catch {{
     Write-Host "Error launching terminal: $_"

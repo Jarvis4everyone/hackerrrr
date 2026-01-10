@@ -96,17 +96,71 @@ for i in range(num_terminals):
         f.write(matrix_script)
     temp_files.append(temp_file)
 
-# Launch terminals independently (non-blocking)
-# Using 'start' with /B flag would hide window, so we use regular start
-# Each terminal runs independently and closes when done
+# Get Python executable path
+python_exe = sys.executable
+if not python_exe or not os.path.exists(python_exe):
+    # Try common Python paths
+    username = os.environ.get('USERNAME', '')
+    python_paths = [
+        os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Programs', 'Python', 'Python310', 'python.exe'),
+        os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Programs', 'Python', 'Python311', 'python.exe'),
+        os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Programs', 'Python', 'Python312', 'python.exe'),
+        r'C:\Python310\python.exe',
+        r'C:\Python311\python.exe',
+        r'C:\Python312\python.exe',
+        r'C:\Program Files\Python310\python.exe',
+        r'C:\Program Files\Python311\python.exe',
+        r'C:\Program Files\Python312\python.exe',
+    ]
+    if username:
+        python_paths.extend([
+            rf'C:\Users\{username}\AppData\Local\Programs\Python\Python310\python.exe',
+            rf'C:\Users\{username}\AppData\Local\Programs\Python\Python311\python.exe',
+            rf'C:\Users\{username}\AppData\Local\Programs\Python\Python312\python.exe',
+        ])
+    for path in python_paths:
+        if os.path.exists(path):
+            python_exe = path
+            break
+    else:
+        python_exe = 'python'  # Fallback to PATH
 
+print(f"[*] Using Python: {python_exe}")
+
+# Launch terminals independently (non-blocking)
+# Create batch files for each terminal to ensure proper execution
 for i in range(num_terminals):
-    # Use subprocess.Popen with shell=True and don't wait
-    # The /C flag makes cmd close after the command finishes
-    cmd = f'start "Hacker Terminal {i+1}" cmd /C "color 0a && python "{temp_files[i]}""'
-    subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    print(f"[+] Terminal {i+1}/{num_terminals} launched")
-    time.sleep(1)  # 1 second delay between each terminal
+    # Create a batch file that will execute the Python script
+    batch_file = os.path.join(tempfile.gettempdir(), f"matrix_terminal_{i}.bat")
+    with open(batch_file, 'w', encoding='utf-8') as f:
+        f.write('@echo off\n')
+        f.write('color 0a\n')
+        f.write('title Hacker Terminal {}\n'.format(i+1))
+        f.write('mode con: cols=100 lines=35\n')
+        if python_exe == 'python':
+            f.write(f'python "{temp_files[i]}"\n')
+        else:
+            python_path_escaped = python_exe.replace('"', '""')
+            f.write(f'"{python_path_escaped}" "{temp_files[i]}"\n')
+        f.write('if errorlevel 1 (\n')
+        f.write('    echo.\n')
+        f.write('    echo [ERROR] Failed to execute Python script\n')
+        f.write('    pause\n')
+        f.write(')\n')
+        f.write('pause\n')
+    
+    # Launch using start command with /K to keep terminal open
+    # Use quotes around batch file path to handle spaces
+    batch_file_quoted = f'"{batch_file}"'
+    cmd = f'start "Hacker Terminal {i+1}" cmd /K {batch_file_quoted}'
+    
+    try:
+        subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        print(f"[+] Terminal {i+1}/{num_terminals} launched")
+    except Exception as e:
+        print(f"[!] Error launching terminal {i+1}: {e}")
+    
+    time.sleep(0.5)  # Small delay between terminals
 
 print()
 print("[OK] All terminals launched!")
