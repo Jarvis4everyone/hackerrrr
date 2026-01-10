@@ -271,6 +271,133 @@ class MatrixTerminal:
             pass
 
 
+def launch_multiple_terminals(num_terminals=10, duration=15, message="YOUR PC HAS BEEN HACKED! CONGRATS!"):
+    """
+    Launch multiple matrix GUI terminals
+    
+    Args:
+        num_terminals: Number of terminal windows to open (default: 10)
+        duration: Duration in seconds for each terminal (default: 15)
+        message: Message to display in terminals (default: "YOUR PC HAS BEEN HACKED! CONGRATS!")
+    """
+    import subprocess
+    import tempfile
+    import importlib.util
+    
+    print("[*] MATRIX RAIN ATTACK")
+    print(f"[*] Opening {num_terminals} GUI terminal windows...")
+    print(f"[*] Duration: {duration} seconds each")
+    print(f"[*] Message: {message}")
+    print("[*] Launching terminals (non-blocking)...")
+    
+    # Find the matrix_gui_terminal.py script
+    script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
+    matrix_gui_script = os.path.join(script_dir, "matrix_gui_terminal.py")
+    
+    # If not found, try other locations
+    if not os.path.exists(matrix_gui_script):
+        possible_paths = [
+            os.path.join(os.path.dirname(script_dir), "matrix_gui_terminal.py"),
+            os.path.join(os.path.dirname(os.path.dirname(script_dir)), "Scripts", "matrix_gui_terminal.py"),
+            os.path.join(tempfile.gettempdir(), "matrix_gui_terminal.py"),
+        ]
+        for path in possible_paths:
+            if os.path.exists(path):
+                matrix_gui_script = path
+                break
+    
+    if not matrix_gui_script or not os.path.exists(matrix_gui_script):
+        print("[!] ERROR: matrix_gui_terminal.py not found!")
+        return
+    
+    # Get Python executable
+    python_exe = sys.executable
+    if not python_exe or not os.path.exists(python_exe):
+        python_exe = 'python'
+    
+    # Calculate screen dimensions for positioning
+    try:
+        import tkinter as tk
+        root = tk.Tk()
+        screen_width = root.winfo_screenwidth()
+        screen_height = root.winfo_screenheight()
+        root.destroy()
+    except:
+        screen_width = 1920
+        screen_height = 1080
+    
+    # Terminal dimensions
+    terminal_width = 850
+    terminal_height = 450
+    spacing = 20
+    terminals_per_row = min(4, num_terminals)
+    
+    # Launch terminals
+    for i in range(num_terminals):
+        # Calculate position
+        row = i // terminals_per_row
+        col = i % terminals_per_row
+        x = col * (terminal_width + spacing) + spacing
+        y = row * (terminal_height + spacing) + spacing
+        
+        # Create launcher script
+        launcher_script = os.path.join(tempfile.gettempdir(), f"matrix_launcher_{i}.py")
+        with open(launcher_script, 'w', encoding='utf-8') as f:
+            f.write('''import sys
+import os
+import importlib.util
+
+# Load and run the GUI terminal module
+gui_script_path = r"{}"
+try:
+    spec = importlib.util.spec_from_file_location("matrix_gui_terminal", gui_script_path)
+    matrix_gui_terminal = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(matrix_gui_terminal)
+    
+    # Create terminal with position and duration
+    terminal = matrix_gui_terminal.MatrixTerminal(
+        title="Hacker Terminal {}",
+        width={},
+        height={},
+        x={},
+        y={},
+        flag_file=None,
+        duration={},
+        message="{}"
+    )
+    terminal.run()
+except Exception as e:
+    import traceback
+    print(f"Error: {{e}}")
+    traceback.print_exc()
+    input("Press Enter to exit...")
+'''.format(matrix_gui_script.replace("\\", "\\\\"),
+           i+1,
+           terminal_width,
+           terminal_height,
+           x, y,
+           duration,
+           message.replace('"', '\\"').replace('\\', '\\\\')))
+        
+        # Launch Python script
+        try:
+            subprocess.Popen(
+                [python_exe, launcher_script],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+            )
+            print(f"[+] Terminal {i+1}/{num_terminals} launched")
+        except Exception as e:
+            print(f"[!] Error launching terminal {i+1}: {e}")
+        
+        time.sleep(0.3)  # Small delay between terminals
+    
+    print()
+    print("[OK] All terminals launched!")
+    print(f"[*] Each will run for {duration} seconds then close automatically")
+
+
 def main():
     """Main function - can be called as standalone or imported"""
     import sys
@@ -280,6 +407,24 @@ def main():
     flag_file = os.environ.get("TERMINAL_FLAG_FILE", None)
     duration = os.environ.get("TERMINAL_DURATION", None)
     message = os.environ.get("TERMINAL_MESSAGE", "WELCOME MR. KAUSHIK!")
+    
+    # Check if we should launch multiple terminals
+    num_terminals = os.environ.get("MATRIX_TERMINALS", None)
+    if num_terminals:
+        try:
+            num_terminals = int(num_terminals)
+            if not duration:
+                duration = os.environ.get("MATRIX_DURATION", "15")
+            try:
+                duration = float(duration)
+            except:
+                duration = 15.0
+            if not message or message == "WELCOME MR. KAUSHIK!":
+                message = os.environ.get("MATRIX_MESSAGE", "YOUR PC HAS BEEN HACKED! CONGRATS!")
+            launch_multiple_terminals(num_terminals, duration, message)
+            return
+        except:
+            pass
     
     # Parse command line arguments
     if len(sys.argv) > 1:
@@ -295,6 +440,16 @@ def main():
                     pass
             elif arg.startswith("--message="):
                 message = arg.split("=", 1)[1]
+            elif arg.startswith("--terminals="):
+                # Launch multiple terminals
+                try:
+                    num_terminals = int(arg.split("=", 1)[1])
+                    if not duration:
+                        duration = 15.0
+                    launch_multiple_terminals(num_terminals, duration, message)
+                    return
+                except:
+                    pass
     
     if duration:
         try:
@@ -302,7 +457,7 @@ def main():
         except:
             duration = None
     
-    # Create and run terminal
+    # Create and run single terminal
     terminal = MatrixTerminal(
         title=title,
         flag_file=flag_file,
