@@ -229,49 +229,41 @@ def launch_matrix_terminals():
     with open(flag_file, 'w') as f:
         f.write("1")  # Start as active
     
-    # Use the GUI matrix terminal instead of cmd.exe
-    # Import the matrix_gui_terminal module
-    matrix_terminal_script = '''
-import sys
-import os
-import tempfile
-
-# Set environment variables for the GUI terminal
-os.environ["MATRIX_FLAG_FILE"] = r"%s"
-os.environ["MATRIX_DURATION"] = "300"  # 5 minutes max
-os.environ["MATRIX_MESSAGE"] = "WELCOME MR. KAUSHIK!"
-os.environ["MATRIX_AUTO_CLOSE"] = "true"  # Close when flag file says to stop
-
-# Import and run the GUI terminal
-try:
-    # Try to import from the same directory
-    import matrix_gui_terminal
-    matrix_gui_terminal.main()
-except ImportError:
-    # If not found, try to find it in common locations
+    # Find or create the GUI matrix terminal script
     script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
-    possible_paths = [
-        os.path.join(script_dir, "matrix_gui_terminal.py"),
-        os.path.join(os.path.dirname(script_dir), "matrix_gui_terminal.py"),
-        os.path.join(tempfile.gettempdir(), "matrix_gui_terminal.py"),
-    ]
+    matrix_gui_script = os.path.join(script_dir, "matrix_gui_terminal.py")
     
-    for path in possible_paths:
-        if os.path.exists(path):
-            import importlib.util
-            spec = importlib.util.spec_from_file_location("matrix_gui_terminal", path)
-            matrix_gui_terminal = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(matrix_gui_terminal)
-            matrix_gui_terminal.main()
-            break
-    else:
-        print("ERROR: Could not find matrix_gui_terminal.py")
-        input("Press Enter to exit...")
-''' % flag_file.replace("\\", "\\\\")
-    
-    temp_file = os.path.join(tempfile.gettempdir(), "matrix_hacker.py")
-    with open(temp_file, 'w', encoding='utf-8') as f:
-        f.write(matrix_script)
+    # If not found in script directory, copy it to temp directory
+    if not os.path.exists(matrix_gui_script):
+        # Try to find it in Scripts folder
+        possible_paths = [
+            os.path.join(os.path.dirname(script_dir), "Scripts", "matrix_gui_terminal.py"),
+            os.path.join(os.path.dirname(os.path.dirname(script_dir)), "Scripts", "matrix_gui_terminal.py"),
+        ]
+        for path in possible_paths:
+            if os.path.exists(path):
+                matrix_gui_script = path
+                break
+        else:
+            # Copy to temp directory
+            matrix_gui_script = os.path.join(tempfile.gettempdir(), "matrix_gui_terminal.py")
+            # Read the GUI script content and write it
+            try:
+                import importlib.util
+                # Try to load from Scripts directory
+                scripts_dir = os.path.join(os.path.dirname(script_dir), "Scripts") if os.path.dirname(script_dir) else script_dir
+                gui_script_path = os.path.join(scripts_dir, "matrix_gui_terminal.py")
+                if os.path.exists(gui_script_path):
+                    with open(gui_script_path, 'r', encoding='utf-8') as f:
+                        gui_content = f.read()
+                    with open(matrix_gui_script, 'w', encoding='utf-8') as f:
+                        f.write(gui_content)
+                else:
+                    print("    [!] Warning: matrix_gui_terminal.py not found, using fallback")
+                    matrix_gui_script = None
+            except Exception as e:
+                print(f"    [!] Error setting up GUI terminal: {e}")
+                matrix_gui_script = None
     
     # Get Python executable path ONCE before the loop - use sys.executable if available, otherwise try common paths
     python_exe = sys.executable
@@ -329,87 +321,72 @@ except ImportError:
         x = monitor['x'] + random.randint(0, max(0, monitor['width'] - 850))
         y = monitor['y'] + random.randint(0, max(0, monitor['height'] - 500))
         
-        # Create a batch file that will execute the Python script
-        # This is more reliable than trying to pass complex commands through PowerShell
-        batch_file = os.path.join(tempfile.gettempdir(), f"matrix_terminal_{i}.bat")
-        try:
-            with open(batch_file, 'w', encoding='utf-8') as f:
-                f.write('@echo off\n')
-                f.write('color 0a\n')
-                f.write('title HACKER TERMINAL\n')
-                f.write('mode con: cols=100 lines=35\n')
-                if python_exe == 'python':
-                    f.write(f'python "{temp_file}"\n')
-                else:
-                    # Escape quotes in Python path if needed for batch file
-                    python_path_escaped = python_exe.replace('"', '""')
-                    f.write(f'"{python_path_escaped}" "{temp_file}"\n')
-                f.write('if errorlevel 1 (\n')
-                f.write('    echo.\n')
-                f.write('    echo [ERROR] Failed to execute Python script\n')
-                f.write('    echo Python path: {}\n'.format(python_exe.replace('"', '')))
-                f.write('    echo Script path: {}\n'.format(temp_file))
-                f.write('    pause\n')
-                f.write(')\n')
-                f.write('pause\n')
-        except Exception as e:
-            print(f"    [!] Error creating batch file: {e}")
+        # Launch GUI matrix terminal directly using Python
+        if not matrix_gui_script or not os.path.exists(matrix_gui_script):
+            print(f"    [!] Matrix GUI script not found, skipping terminal {i+1}")
             continue
         
-        # Use PowerShell to launch cmd.exe with the batch file and position the window
-        batch_file_escaped = batch_file.replace("\\", "\\\\").replace('"', '`"')
-        ps_cmd = f'''
-$ErrorActionPreference = "Continue"
-try {{
-    # Launch cmd.exe with the batch file
-    $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/K", "{batch_file_escaped}" -PassThru -WindowStyle Normal
-    Start-Sleep -Milliseconds 800
+        # Create a launcher script that will run the GUI terminal
+        launcher_script = os.path.join(tempfile.gettempdir(), f"matrix_launcher_{i}.py")
+        with open(launcher_script, 'w', encoding='utf-8') as f:
+            f.write('''import sys
+import os
+import importlib.util
+
+# Set environment variables
+os.environ["TERMINAL_FLAG_FILE"] = r"{}"
+os.environ["TERMINAL_MESSAGE"] = "WELCOME MR. KAUSHIK!"
+
+# Load and run the GUI terminal module
+gui_script_path = r"{}"
+try:
+    spec = importlib.util.spec_from_file_location("matrix_gui_terminal", gui_script_path)
+    matrix_gui_terminal = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(matrix_gui_terminal)
     
-    Add-Type @"
-using System;
-using System.Runtime.InteropServices;
-public class Win32 {{
-    [DllImport("user32.dll")]
-    public static extern bool MoveWindow(IntPtr hWnd, int X, int Y, int nWidth, int nHeight, bool bRepaint);
-    [DllImport("user32.dll")]
-    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-    [DllImport("user32.dll")]
-    public static extern bool SetForegroundWindow(IntPtr hWnd);
-}}
-"@
-    
-    $hwnd = $process.MainWindowHandle
-    $maxAttempts = 20
-    $attempt = 0
-    while ($hwnd -eq [IntPtr]::Zero -and $attempt -lt $maxAttempts) {{
-        Start-Sleep -Milliseconds 300
-        try {{
-            $process.Refresh()
-            $hwnd = $process.MainWindowHandle
-        }} catch {{
-            break
-        }}
-        $attempt++
-    }}
-    
-    if ($hwnd -ne [IntPtr]::Zero) {{
-        [Win32]::ShowWindow($hwnd, 4)
-        [Win32]::SetForegroundWindow($hwnd)
-        [Win32]::MoveWindow($hwnd, {x}, {y}, 850, 450, $true)
-    }} else {{
-        Write-Host "Warning: Could not get window handle for terminal {i+1}"
-    }}
-}} catch {{
-    Write-Host "Error launching terminal: $_"
-}}
-'''
+    # Create terminal with position
+    terminal = matrix_gui_terminal.MatrixTerminal(
+        title="HACKER TERMINAL",
+        width=850,
+        height=450,
+        x={},
+        y={},
+        flag_file=r"{}",
+        duration=None,  # Run until flag file says to stop
+        message="WELCOME MR. KAUSHIK!"
+    )
+    terminal.run()
+except Exception as e:
+    import traceback
+    print(f"Error: {{e}}")
+    traceback.print_exc()
+    input("Press Enter to exit...")
+'''.format(flag_file.replace("\\", "\\\\"), 
+           matrix_gui_script.replace("\\", "\\\\"),
+           x, y,
+           flag_file.replace("\\", "\\\\")))
         
-        process = subprocess.Popen(
-            ['powershell', '-ExecutionPolicy', 'Bypass', '-Command', ps_cmd],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
-        matrix_processes.append(process)
+        # Launch Python script directly (GUI will handle positioning)
+        try:
+            if python_exe == 'python':
+                process = subprocess.Popen(
+                    [python_exe, launcher_script],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+                )
+            else:
+                process = subprocess.Popen(
+                    [python_exe, launcher_script],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+                )
+            matrix_processes.append(process)
+            print(f"    [*] Terminal {i+1}/15 launched")
+        except Exception as e:
+            print(f"    [!] Error launching terminal {i+1}: {e}")
+            continue
         
         # Wait 1.5 seconds before opening next terminal (slower opening)
         time.sleep(1.5)

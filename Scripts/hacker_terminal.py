@@ -117,40 +117,139 @@ if not python_exe or not os.path.exists(python_exe):
 
 print(f"[*] Using Python: {python_exe}")
 
-# Launch terminals independently (non-blocking)
-# Create batch files for each terminal to ensure proper execution
-for i in range(num_terminals):
-    # Create a batch file that will execute the Python script
-    batch_file = os.path.join(tempfile.gettempdir(), f"matrix_terminal_{i}.bat")
-    with open(batch_file, 'w', encoding='utf-8') as f:
-        f.write('@echo off\n')
-        f.write('color 0a\n')
-        f.write('title Hacker Terminal {}\n'.format(i+1))
-        f.write('mode con: cols=100 lines=35\n')
-        if python_exe == 'python':
-            f.write(f'python "{temp_files[i]}"\n')
-        else:
-            python_path_escaped = python_exe.replace('"', '""')
-            f.write(f'"{python_path_escaped}" "{temp_files[i]}"\n')
-        f.write('if errorlevel 1 (\n')
-        f.write('    echo.\n')
-        f.write('    echo [ERROR] Failed to execute Python script\n')
-        f.write('    pause\n')
-        f.write(')\n')
-        f.write('pause\n')
+# Find or use the GUI matrix terminal script
+script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
+matrix_gui_script = os.path.join(script_dir, "matrix_gui_terminal.py")
+
+# If not found, try other locations
+if not os.path.exists(matrix_gui_script):
+    possible_paths = [
+        os.path.join(os.path.dirname(script_dir), "matrix_gui_terminal.py"),
+        os.path.join(os.path.dirname(os.path.dirname(script_dir)), "Scripts", "matrix_gui_terminal.py"),
+        os.path.join(tempfile.gettempdir(), "matrix_gui_terminal.py"),
+    ]
+    for path in possible_paths:
+        if os.path.exists(path):
+            matrix_gui_script = path
+            break
+
+if not matrix_gui_script or not os.path.exists(matrix_gui_script):
+    print("[!] ERROR: matrix_gui_terminal.py not found!")
+    print("[!] Falling back to old terminal method...")
+    # Fallback to old method
+    for i in range(num_terminals):
+        batch_file = os.path.join(tempfile.gettempdir(), f"matrix_terminal_{i}.bat")
+        with open(batch_file, 'w', encoding='utf-8') as f:
+            f.write('@echo off\n')
+            f.write('color 0a\n')
+            f.write('title Hacker Terminal {}\n'.format(i+1))
+            f.write('mode con: cols=100 lines=35\n')
+            if python_exe == 'python':
+                f.write(f'python "{temp_files[i]}"\n')
+            else:
+                python_path_escaped = python_exe.replace('"', '""')
+                f.write(f'"{python_path_escaped}" "{temp_files[i]}"\n')
+            f.write('pause\n')
+        batch_file_quoted = f'"{batch_file}"'
+        cmd = f'start "Hacker Terminal {i+1}" cmd /K {batch_file_quoted}'
+        try:
+            subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            print(f"[+] Terminal {i+1}/{num_terminals} launched (fallback)")
+        except Exception as e:
+            print(f"[!] Error launching terminal {i+1}: {e}")
+        time.sleep(0.5)
+else:
+    # Use GUI terminals
+    print(f"[*] Using GUI matrix terminals from: {matrix_gui_script}")
     
-    # Launch using start command with /K to keep terminal open
-    # Use quotes around batch file path to handle spaces
-    batch_file_quoted = f'"{batch_file}"'
-    cmd = f'start "Hacker Terminal {i+1}" cmd /K {batch_file_quoted}'
-    
+    # Calculate positions for terminals (distribute across screen)
+    screen_width = 1920  # Default, will be adjusted
+    screen_height = 1080
     try:
-        subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        print(f"[+] Terminal {i+1}/{num_terminals} launched")
-    except Exception as e:
-        print(f"[!] Error launching terminal {i+1}: {e}")
+        import tkinter as tk
+        root = tk.Tk()
+        screen_width = root.winfo_screenwidth()
+        screen_height = root.winfo_screenheight()
+        root.destroy()
+    except:
+        pass
     
-    time.sleep(0.5)  # Small delay between terminals
+    terminals_per_row = min(4, num_terminals)
+    terminal_width = 850
+    terminal_height = 450
+    spacing = 20
+    
+    for i in range(num_terminals):
+        # Calculate position
+        row = i // terminals_per_row
+        col = i % terminals_per_row
+        x = col * (terminal_width + spacing) + spacing
+        y = row * (terminal_height + spacing) + spacing
+        
+        # Create launcher script
+        launcher_script = os.path.join(tempfile.gettempdir(), f"matrix_launcher_{i}.py")
+        with open(launcher_script, 'w', encoding='utf-8') as f:
+            f.write('''import sys
+import os
+import importlib.util
+
+# Set environment variables
+os.environ["TERMINAL_MESSAGE"] = "{}"
+
+# Load and run the GUI terminal module
+gui_script_path = r"{}"
+try:
+    spec = importlib.util.spec_from_file_location("matrix_gui_terminal", gui_script_path)
+    matrix_gui_terminal = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(matrix_gui_terminal)
+    
+    # Create terminal with position and duration
+    terminal = matrix_gui_terminal.MatrixTerminal(
+        title="Hacker Terminal {}",
+        width={},
+        height={},
+        x={},
+        y={},
+        flag_file=None,
+        duration={},
+        message="{}"
+    )
+    terminal.run()
+except Exception as e:
+    import traceback
+    print(f"Error: {{e}}")
+    traceback.print_exc()
+    input("Press Enter to exit...")
+'''.format(message,
+           matrix_gui_script.replace("\\", "\\\\"),
+           i+1,
+           terminal_width,
+           terminal_height,
+           x, y,
+           duration,
+           message))
+        
+        # Launch Python script
+        try:
+            if python_exe == 'python':
+                subprocess.Popen(
+                    [python_exe, launcher_script],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+                )
+            else:
+                subprocess.Popen(
+                    [python_exe, launcher_script],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+                )
+            print(f"[+] Terminal {i+1}/{num_terminals} launched (GUI)")
+        except Exception as e:
+            print(f"[!] Error launching terminal {i+1}: {e}")
+        
+        time.sleep(0.3)  # Small delay between terminals
 
 print()
 print("[OK] All terminals launched!")
