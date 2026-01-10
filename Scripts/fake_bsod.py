@@ -133,7 +133,8 @@ def create_bsod():
                 bg='#0078D7'  # BSOD blue background
             )
             qr_label.image = qr_photo  # Keep a reference to prevent garbage collection
-            qr_label.place(relx=0.08, rely=0.78, anchor='w')
+            # Place QR code on the left side, below the main content
+            qr_label.place(relx=0.08, rely=0.75, anchor='nw')
             print("[*] QR code displayed successfully")
         except Exception as e:
             print(f"[!] Error creating QR code: {e}")
@@ -141,7 +142,7 @@ def create_bsod():
             traceback.print_exc()
             # Fallback to white square if QR code generation fails
             qr_frame = tk.Frame(root, bg='white', width=200, height=200)
-            qr_frame.place(relx=0.08, rely=0.78, anchor='w')
+            qr_frame.place(relx=0.08, rely=0.75, anchor='nw')
             qr_frame.pack_propagate(False)
     else:
         # Fallback: white square placeholder if libraries not available
@@ -150,10 +151,10 @@ def create_bsod():
         if not PIL_AVAILABLE:
             print("[!] PIL/Pillow not installed - install with: pip install Pillow")
         qr_frame = tk.Frame(root, bg='white', width=200, height=200)
-        qr_frame.place(relx=0.08, rely=0.78, anchor='w')
+        qr_frame.place(relx=0.08, rely=0.75, anchor='nw')
         qr_frame.pack_propagate(False)
     
-    # Stop code info
+    # Stop code info - place to the right of QR code, aligned with QR code top
     stop_code = tk.Label(
         root,
         text="For more information about this issue and possible fixes, visit\nhttps://www.windows.com/stopcode\n\nIf you call a support person, give them this info:\nStop code: CRITICAL_PROCESS_DIED",
@@ -162,7 +163,9 @@ def create_bsod():
         bg='#0078D7',
         justify='left'
     )
-    stop_code.place(relx=0.15, rely=0.78, anchor='w')
+    # Position text to the right of QR code (QR is 200px wide + 8% from left = ~15% + 200px)
+    # Use 0.35 (35% from left) to ensure it's well to the right of the QR code
+    stop_code.place(relx=0.35, rely=0.75, anchor='nw')
     
     # Animation and timer variables
     start_time = time.time()

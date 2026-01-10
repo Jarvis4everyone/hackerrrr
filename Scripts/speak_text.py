@@ -217,12 +217,20 @@ def main():
         else:
             print("[!] CLI failed, trying Python API...")
             # Fallback to Python API
+            # Note: Cannot use asyncio.run() in script context (event loop already running)
+            # Use event loop pattern per SERVER_SCRIPT_DEVELOPMENT_GUIDE.md
             try:
-                used_voice = asyncio.run(TextToAudioFile(message, VOICE, tmp_path))
-                if used_voice != VOICE:
-                    actual_voice_used = used_voice
-                print(f"[*] Audio generated (Python API): {tmp_path}")
-                audio_generated = True
+                # Create a new event loop for this script (per development guide)
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    used_voice = loop.run_until_complete(TextToAudioFile(message, VOICE, tmp_path))
+                    if used_voice != VOICE:
+                        actual_voice_used = used_voice
+                    print(f"[*] Audio generated (Python API): {tmp_path}")
+                    audio_generated = True
+                finally:
+                    loop.close()
             except Exception as e:
                 print(f"[!] Python API also failed: {e}")
                 raise Exception(f"Both CLI and Python API failed. Last error: {e}")
