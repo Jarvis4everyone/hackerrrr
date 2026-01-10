@@ -135,30 +135,11 @@ if not os.path.exists(matrix_gui_script):
 
 if not matrix_gui_script or not os.path.exists(matrix_gui_script):
     print("[!] ERROR: matrix_gui_terminal.py not found!")
-    print("[!] Falling back to old terminal method...")
-    # Fallback to old method
-    for i in range(num_terminals):
-        batch_file = os.path.join(tempfile.gettempdir(), f"matrix_terminal_{i}.bat")
-        with open(batch_file, 'w', encoding='utf-8') as f:
-            f.write('@echo off\n')
-            f.write('color 0a\n')
-            f.write('title Hacker Terminal {}\n'.format(i+1))
-            f.write('mode con: cols=100 lines=35\n')
-            if python_exe == 'python':
-                f.write(f'python "{temp_files[i]}"\n')
-            else:
-                python_path_escaped = python_exe.replace('"', '""')
-                f.write(f'"{python_path_escaped}" "{temp_files[i]}"\n')
-            f.write('pause\n')
-        batch_file_quoted = f'"{batch_file}"'
-        cmd = f'start "Hacker Terminal {i+1}" cmd /K {batch_file_quoted}'
-        try:
-            subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            print(f"[+] Terminal {i+1}/{num_terminals} launched (fallback)")
-        except Exception as e:
-            print(f"[!] Error launching terminal {i+1}: {e}")
-        time.sleep(0.5)
-else:
+    print("[!] Please ensure matrix_gui_terminal.py is in the Scripts directory")
+    print("[!] Terminals will not be launched without the GUI script")
+    sys.exit(1)
+
+# Use GUI terminals (no fallback - GUI is required)
     # Use GUI terminals
     print(f"[*] Using GUI matrix terminals from: {matrix_gui_script}")
     

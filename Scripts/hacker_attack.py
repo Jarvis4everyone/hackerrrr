@@ -1322,25 +1322,27 @@ def close_all_matrix_terminals():
     except:
         pass
     
-    # Kill all cmd.exe processes running matrix scripts
+    # Kill all Python processes running matrix GUI terminals
     ps_script = '''
-# Kill cmd.exe processes running matrix scripts
-Get-WmiObject Win32_Process -Filter "name='cmd.exe'" | ForEach-Object {
+# Kill Python processes running matrix GUI terminals
+Get-WmiObject Win32_Process -Filter "name='python.exe'" | ForEach-Object {
     try {
         $cmdLine = $_.CommandLine
         if ($cmdLine -and (
-            $cmdLine -like "*matrix_hacker.py*" -or
-            $cmdLine -like "*color 0a*")) {
+            $cmdLine -like "*matrix_launcher*.py*" -or
+            $cmdLine -like "*matrix_gui_terminal*")) {
             Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
         }
     } catch {}
 }
 
-# Also kill any Python processes running matrix script
-Get-WmiObject Win32_Process -Filter "name='python.exe'" | ForEach-Object {
+# Also check for pythonw.exe (GUI processes)
+Get-WmiObject Win32_Process -Filter "name='pythonw.exe'" | ForEach-Object {
     try {
         $cmdLine = $_.CommandLine
-        if ($cmdLine -and $cmdLine -like "*matrix_hacker.py*") {
+        if ($cmdLine -and (
+            $cmdLine -like "*matrix_launcher*.py*" -or
+            $cmdLine -like "*matrix_gui_terminal*")) {
             Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
         }
     } catch {}
