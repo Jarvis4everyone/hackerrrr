@@ -7,6 +7,7 @@ from app.services.pc_service import PCService
 from app.services.execution_service import ExecutionService
 from app.models.execution import ExecutionCreate
 import logging
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -18,36 +19,74 @@ class ConnectionManager:
         # Store active WebSocket connections
         # Format: {pc_id: websocket}
         self.active_connections: Dict[str, WebSocket] = {}
+        # Lock to prevent simultaneous connection attempts for same PC
+        self._connection_locks: Dict[str, asyncio.Lock] = {}
+        self._locks_lock = asyncio.Lock()
+    
+    async def _get_lock(self, pc_id: str) -> asyncio.Lock:
+        """Get or create a lock for a PC ID"""
+        async with self._locks_lock:
+            if pc_id not in self._connection_locks:
+                self._connection_locks[pc_id] = asyncio.Lock()
+            return self._connection_locks[pc_id]
     
     async def connect(self, websocket: WebSocket, pc_id: str, pc_name: str = None, 
                      ip_address: str = None, hostname: str = None):
         """Accept and register a new WebSocket connection"""
-        # Handle reconnection: if PC already has a connection, disconnect the old one first
-        if pc_id in self.active_connections:
-            old_websocket = self.active_connections[pc_id]
-            logger.info(f"[!] PC {pc_id} reconnecting - closing old connection")
-            try:
-                # Check if old WebSocket is still open before closing
+        # Use lock to prevent simultaneous connections for same PC
+        lock = await self._get_lock(pc_id)
+        async with lock:
+            # Handle reconnection: if PC already has a connection, disconnect the old one first
+            if pc_id in self.active_connections:
+                old_websocket = self.active_connections[pc_id]
+                logger.info(f"[!] PC {pc_id} reconnecting - closing old connection")
                 try:
-                    # Try to close old connection gracefully
-                    if old_websocket.client_state.name != "DISCONNECTED":
-                        await old_websocket.close(code=1000, reason="Reconnecting")
+                    # Check if old WebSocket is still open before closing
+                    try:
+                        # Try to close old connection gracefully
+                        if hasattr(old_websocket, 'client_state') and old_websocket.client_state.name != "DISCONNECTED":
+                            await old_websocket.close(code=1000, reason="Reconnecting")
+                    except Exception as e:
+                        logger.debug(f"Error closing old WebSocket for {pc_id}: {e}")
                 except Exception as e:
-                    logger.debug(f"Error closing old WebSocket for {pc_id}: {e}")
+                    logger.debug(f"Error checking old WebSocket state for {pc_id}: {e}")
+                finally:
+                    # Always remove old connection from dict, even if close failed
+                    if pc_id in self.active_connections:
+                        del self.active_connections[pc_id]
+            
+            # Verify WebSocket is in correct state before accepting
+            try:
+                # Check if WebSocket is already accepted or in wrong state
+                if hasattr(websocket, 'client_state'):
+                    state = websocket.client_state.name
+                    if state == "CONNECTED":
+                        logger.warning(f"WebSocket for {pc_id} already connected, skipping accept")
+                        # Still add to active connections if not already there
+                        if pc_id not in self.active_connections:
+                            self.active_connections[pc_id] = websocket
+                    elif state == "DISCONNECTED":
+                        logger.error(f"WebSocket for {pc_id} is already disconnected, cannot accept")
+                        raise Exception("WebSocket is already disconnected")
+                    else:
+                        # Accept new connection
+                        await websocket.accept()
+                        # Verify it was accepted
+                        if hasattr(websocket, 'client_state'):
+                            new_state = websocket.client_state.name
+                            if new_state != "CONNECTED":
+                                raise Exception(f"WebSocket accept failed, state is {new_state}")
+                        self.active_connections[pc_id] = websocket
+                else:
+                    # Fallback: accept anyway if client_state not available
+                    await websocket.accept()
+                    self.active_connections[pc_id] = websocket
             except Exception as e:
-                logger.debug(f"Error checking old WebSocket state for {pc_id}: {e}")
-            finally:
-                # Always remove old connection from dict, even if close failed
+                logger.error(f"Error accepting WebSocket for {pc_id}: {e}")
+                # Remove from active connections if accept failed
                 if pc_id in self.active_connections:
                     del self.active_connections[pc_id]
-        
-        # Accept new connection
-        try:
-            await websocket.accept()
-            self.active_connections[pc_id] = websocket
-        except Exception as e:
-            logger.error(f"Error accepting WebSocket for {pc_id}: {e}")
-            raise
+                raise
         
         # Extract IP address from WebSocket if not provided
         if not ip_address:
