@@ -73,15 +73,7 @@ class ScriptService:
             elif var_name == "POPUP_ICON":
                 param_type = "select"
                 description = "Icon type (error, warning, info, question)"
-            elif var_name == "MATRIX_TERMINALS":
-                param_type = "number"
-                description = "Number of terminal windows (1-30)"
-            elif var_name == "MATRIX_DURATION":
-                param_type = "number"
-                description = "Duration in seconds (5-120)"
-            elif var_name == "MATRIX_MESSAGE":
-                param_type = "text"
-                description = "Message to display"
+            # MATRIX TERMINAL PARAMETERS REMOVED - FIXED VALUES ONLY
             elif var_name == "FILE_PATH":
                 param_type = "text"
                 description = "Path to file to read"
@@ -115,15 +107,7 @@ class ScriptService:
             elif var_name == "WEBSITES":
                 param_type = "textarea"
                 description = "Comma-separated list of URLs"
-            elif var_name == "MATRIX_DURATION":
-                param_type = "number"
-                description = "Duration in seconds"
-            elif var_name == "MATRIX_TERMINALS":
-                param_type = "number"
-                description = "Number of terminal windows"
-            elif var_name == "MATRIX_MESSAGE":
-                param_type = "textarea"
-                description = "Message to display"
+            # MATRIX TERMINAL PARAMETERS REMOVED - FIXED VALUES ONLY
             elif var_name == "AUDIO_COUNT":
                 param_type = "number"
                 description = "Number of audio files to play"

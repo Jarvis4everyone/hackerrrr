@@ -212,294 +212,12 @@ def cycle_wallpaper():
             print(f"    [OK] Wallpaper set to {os.path.basename(photo_paths[0])} (final)! Cycled {cycle_count} times")
 
 # ============================================
-# 2A. SINGLE 30-SECOND MATRIX TERMINAL
-# ============================================
-def launch_30s_matrix_terminal():
-    """Launch a single matrix terminal that runs for exactly 30 seconds"""
-    print("[2A] Launching 1 Matrix terminal (30 seconds duration)...")
-    
-    # Find or create the GUI matrix terminal script
-    script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
-    matrix_gui_script = os.path.join(script_dir, "matrix_gui_terminal.py")
-    
-    # If not found in script directory, try to find it
-    if not os.path.exists(matrix_gui_script):
-        possible_paths = [
-            os.path.join(os.path.dirname(script_dir), "Scripts", "matrix_gui_terminal.py"),
-            os.path.join(os.path.dirname(os.path.dirname(script_dir)), "Scripts", "matrix_gui_terminal.py"),
-        ]
-        for path in possible_paths:
-            if os.path.exists(path):
-                matrix_gui_script = path
-                break
-        else:
-            print("    [!] Matrix GUI script not found, skipping 30s terminal")
-            return
-    
-    # Get Python executable
-    python_exe = sys.executable
-    if not python_exe or not os.path.exists(python_exe):
-        python_exe = 'python'
-    
-    # Get screen center for positioning
-    try:
-        import tkinter as tk
-        root = tk.Tk()
-        screen_width = root.winfo_screenwidth()
-        screen_height = root.winfo_screenheight()
-        root.destroy()
-        x = (screen_width - 850) // 2
-        y = (screen_height - 450) // 2
-    except:
-        x = 500
-        y = 300
-    
-    # Create launcher script for 30-second terminal
-    launcher_script = os.path.join(tempfile.gettempdir(), "matrix_30s_launcher.py")
-    with open(launcher_script, 'w', encoding='utf-8') as f:
-        f.write('''import sys
-import os
-import importlib.util
-
-# Load and run the GUI terminal module
-gui_script_path = r"{}"
-try:
-    spec = importlib.util.spec_from_file_location("matrix_gui_terminal", gui_script_path)
-    matrix_gui_terminal = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(matrix_gui_terminal)
-    
-    # Create terminal with 30-second duration (max enforced)
-    terminal = matrix_gui_terminal.MatrixTerminal(
-        title="HACKER TERMINAL (30s)",
-        width=850,
-        height=450,
-        x={},
-        y={},
-        flag_file=None,
-        duration=30.0,  # Exactly 30 seconds (max enforced in script)
-        message="YOUR PC HAS BEEN HACKED! CONGRATS!"
-    )
-    terminal.run()
-except Exception as e:
-    import traceback
-    print(f"Error: {{e}}")
-    traceback.print_exc()
-    input("Press Enter to exit...")
-'''.format(matrix_gui_script.replace("\\", "\\\\"), x, y))
-    
-    # Launch Python script
-    try:
-        subprocess.Popen(
-            [python_exe, launcher_script],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
-        )
-        print("    [OK] 30-second Matrix terminal launched!")
-    except Exception as e:
-        print(f"    [!] Error launching 30s terminal: {e}")
-
-# ============================================
-# 2. MATRIX TERMINALS (15) - ACROSS ALL MONITORS
+# 2. MATRIX TERMINALS REMOVED - NOT USED IN HACKER ATTACK
 # ============================================
 def launch_matrix_terminals():
-    global input_blocking_active
-    
-    print("[2] Launching 15 Matrix terminals across ALL monitors...")
-    print("    [*] Opening one by one (0.5s delay between each)...")
-    
-    monitors = get_all_monitors()
-    print("    [*] Distributing across %d monitor(s)" % len(monitors))
-    
-    # Create matrix script that checks input_blocking_active flag
-    # We'll use a file to communicate the flag state
-    flag_file = os.path.join(tempfile.gettempdir(), "hacker_attack_active.flag")
-    with open(flag_file, 'w') as f:
-        f.write("1")  # Start as active
-    
-    # Find or create the GUI matrix terminal script
-    script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
-    matrix_gui_script = os.path.join(script_dir, "matrix_gui_terminal.py")
-    
-    # If not found in script directory, copy it to temp directory
-    if not os.path.exists(matrix_gui_script):
-        # Try to find it in Scripts folder
-        possible_paths = [
-            os.path.join(os.path.dirname(script_dir), "Scripts", "matrix_gui_terminal.py"),
-            os.path.join(os.path.dirname(os.path.dirname(script_dir)), "Scripts", "matrix_gui_terminal.py"),
-        ]
-        for path in possible_paths:
-            if os.path.exists(path):
-                matrix_gui_script = path
-                break
-        else:
-            # Copy to temp directory
-            matrix_gui_script = os.path.join(tempfile.gettempdir(), "matrix_gui_terminal.py")
-            # Read the GUI script content and write it
-            try:
-                import importlib.util
-                # Try to load from Scripts directory
-                scripts_dir = os.path.join(os.path.dirname(script_dir), "Scripts") if os.path.dirname(script_dir) else script_dir
-                gui_script_path = os.path.join(scripts_dir, "matrix_gui_terminal.py")
-                if os.path.exists(gui_script_path):
-                    with open(gui_script_path, 'r', encoding='utf-8') as f:
-                        gui_content = f.read()
-                    with open(matrix_gui_script, 'w', encoding='utf-8') as f:
-                        f.write(gui_content)
-                else:
-                    print("    [!] Warning: matrix_gui_terminal.py not found, using fallback")
-                    matrix_gui_script = None
-            except Exception as e:
-                print(f"    [!] Error setting up GUI terminal: {e}")
-                matrix_gui_script = None
-    
-    # Get Python executable path ONCE before the loop - use sys.executable if available, otherwise try common paths
-    python_exe = sys.executable
-    if not python_exe or not os.path.exists(python_exe):
-        # Try common Python paths
-        username = os.environ.get('USERNAME', '')
-        python_paths = [
-            os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Programs', 'Python', 'Python310', 'python.exe'),
-            os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Programs', 'Python', 'Python311', 'python.exe'),
-            os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Programs', 'Python', 'Python312', 'python.exe'),
-            r'C:\Python310\python.exe',
-            r'C:\Python311\python.exe',
-            r'C:\Python312\python.exe',
-            r'C:\Program Files\Python310\python.exe',
-            r'C:\Program Files\Python311\python.exe',
-            r'C:\Program Files\Python312\python.exe',
-        ]
-        if username:
-            python_paths.extend([
-                rf'C:\Users\{username}\AppData\Local\Programs\Python\Python310\python.exe',
-                rf'C:\Users\{username}\AppData\Local\Programs\Python\Python311\python.exe',
-                rf'C:\Users\{username}\AppData\Local\Programs\Python\Python312\python.exe',
-            ])
-        for path in python_paths:
-            if os.path.exists(path):
-                python_exe = path
-                print(f"    [*] Found Python at: {python_exe}")
-                break
-        else:
-            # Last resort: use 'python' and hope it's in PATH
-            python_exe = 'python'
-            print("    [*] Using 'python' command (must be in PATH)")
-    else:
-        print(f"    [*] Using Python: {python_exe}")
-    
-    # Escape Python path for PowerShell - handle quotes properly
-    if ' ' in python_exe or python_exe == 'python':
-        # If path has spaces or is just 'python', wrap in quotes
-        python_exe_escaped = f'"{python_exe}"'.replace('\\', '\\\\').replace('"', '\\"')
-    else:
-        python_exe_escaped = python_exe.replace('\\', '\\\\').replace('"', '\\"')
-    
-    matrix_processes = []
-    
-    for i in range(15):
-        # Check if attack should stop
-        if not input_blocking_active:
-            print(f"    [*] Attack ended - stopped at terminal {i+1}/15")
-            break
-        
-        # Distribute terminals across monitors
-        monitor = monitors[i % len(monitors)]
-        
-        # Random position within this monitor
-        x = monitor['x'] + random.randint(0, max(0, monitor['width'] - 850))
-        y = monitor['y'] + random.randint(0, max(0, monitor['height'] - 500))
-        
-        # Launch GUI matrix terminal directly using Python
-        if not matrix_gui_script or not os.path.exists(matrix_gui_script):
-            print(f"    [!] Matrix GUI script not found, skipping terminal {i+1}")
-            continue
-        
-        # Create a launcher script that will run the GUI terminal
-        launcher_script = os.path.join(tempfile.gettempdir(), f"matrix_launcher_{i}.py")
-        with open(launcher_script, 'w', encoding='utf-8') as f:
-            f.write('''import sys
-import os
-import importlib.util
-
-# Set environment variables
-os.environ["TERMINAL_FLAG_FILE"] = r"{}"
-os.environ["TERMINAL_MESSAGE"] = "WELCOME MR. KAUSHIK!"
-
-# Load and run the GUI terminal module
-gui_script_path = r"{}"
-try:
-    spec = importlib.util.spec_from_file_location("matrix_gui_terminal", gui_script_path)
-    matrix_gui_terminal = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(matrix_gui_terminal)
-    
-    # Create terminal with position
-    terminal = matrix_gui_terminal.MatrixTerminal(
-        title="HACKER TERMINAL",
-        width=850,
-        height=450,
-        x={},
-        y={},
-        flag_file=r"{}",
-        duration=30.0,  # HARD MAX 30 seconds - terminal MUST close after 30s
-        message="WELCOME MR. KAUSHIK!"
-    )
-    terminal.run()
-except Exception as e:
-    import traceback
-    print(f"Error: {{e}}")
-    traceback.print_exc()
-    input("Press Enter to exit...")
-'''.format(flag_file.replace("\\", "\\\\"), 
-           matrix_gui_script.replace("\\", "\\\\"),
-           x, y,
-           flag_file.replace("\\", "\\\\")))
-        
-        # Launch Python script directly (GUI will handle positioning)
-        try:
-            if python_exe == 'python':
-                process = subprocess.Popen(
-                    [python_exe, launcher_script],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
-                )
-            else:
-                process = subprocess.Popen(
-                    [python_exe, launcher_script],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
-                )
-            matrix_processes.append(process)
-            print(f"    [*] Terminal {i+1}/15 launched")
-        except Exception as e:
-            print(f"    [!] Error launching terminal {i+1}: {e}")
-            continue
-        
-        # Wait 1.5 seconds before opening next terminal (slower opening)
-        time.sleep(1.5)
-        
-        # Check again if attack should stop
-        if not input_blocking_active:
-            print(f"    [*] Attack ended - stopped at terminal {i+1}/15")
-            break
-    
-    print(f"    [OK] {len(matrix_processes)} Matrix terminals opened!")
-    
-    # Function to update flag file when attack ends
-    def update_flag_file():
-        while input_blocking_active:
-            time.sleep(0.1)
-        # Attack ended - update flag file
-        try:
-            with open(flag_file, 'w') as f:
-                f.write("0")
-        except:
-            pass
-    
-    # Start thread to monitor and update flag file
-    flag_thread = threading.Thread(target=update_flag_file, daemon=True)
-    flag_thread.start()
+    # MATRIX TERMINALS REMOVED - NOT USED IN HACKER ATTACK
+    print("[2] Matrix terminals removed from hacker attack")
+    pass
 
 # ============================================
 # 3. HIDE DESKTOP ICONS
@@ -1399,54 +1117,8 @@ Write-Output "Closed $closed popup windows"
 # CLOSE ALL MATRIX TERMINALS
 # ============================================
 def close_all_matrix_terminals():
-    """Close all matrix terminal windows"""
-    print("[*] Closing all matrix terminals...")
-    
-    # Update flag file to signal terminals to stop
-    flag_file = os.path.join(tempfile.gettempdir(), "hacker_attack_active.flag")
-    try:
-        with open(flag_file, 'w') as f:
-            f.write("0")
-    except:
-        pass
-    
-    # Kill all Python processes running matrix GUI terminals
-    ps_script = '''
-# Kill Python processes running matrix GUI terminals
-Get-WmiObject Win32_Process -Filter "name='python.exe'" | ForEach-Object {
-    try {
-        $cmdLine = $_.CommandLine
-        if ($cmdLine -and (
-            $cmdLine -like "*matrix_launcher*.py*" -or
-            $cmdLine -like "*matrix_gui_terminal*")) {
-            Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
-        }
-    } catch {}
-}
-
-# Also check for pythonw.exe (GUI processes)
-Get-WmiObject Win32_Process -Filter "name='pythonw.exe'" | ForEach-Object {
-    try {
-        $cmdLine = $_.CommandLine
-        if ($cmdLine -and (
-            $cmdLine -like "*matrix_launcher*.py*" -or
-            $cmdLine -like "*matrix_gui_terminal*")) {
-            Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
-        }
-    } catch {}
-}
-'''
-    
-    try:
-        subprocess.run(
-            ['powershell', '-ExecutionPolicy', 'Bypass', '-Command', ps_script],
-            capture_output=True,
-            timeout=3
-        )
-    except:
-        pass
-    
-    print("    [OK] All matrix terminals closed!")
+    """Matrix terminals removed - no action needed"""
+    pass
 
 # ============================================
 # RESTORE EVERYTHING
@@ -1463,12 +1135,11 @@ def restore_everything():
     input_blocking_active = False
     time.sleep(0.3)
     
-    # Close ALL terminals and popups TOGETHER IMMEDIATELY
-    print("[*] Closing all terminals and popups immediately...")
+    # Close ALL popups IMMEDIATELY
+    print("[*] Closing all popups immediately...")
     
-    # Start both closing operations in parallel threads
+    # Start closing operations
     close_threads = [
-        threading.Thread(target=close_all_matrix_terminals, name="CloseTerminals"),
         threading.Thread(target=close_all_popups, name="ClosePopups"),
     ]
     
@@ -1528,12 +1199,10 @@ def main():
     wallpaper_thread.start()
     time.sleep(0.3)
     
-    # SIXTH: Start other effects in parallel (matrix terminals, popups) while audio plays
-    print("[*] Starting matrix terminals and popups...")
+    # SIXTH: Start other effects in parallel (popups) while audio plays
+    print("[*] Starting popups...")
     other_threads = [
-        threading.Thread(target=launch_matrix_terminals, name="Matrix"),
         threading.Thread(target=show_popups, name="Popups"),
-        threading.Thread(target=launch_30s_matrix_terminal, name="Matrix30s"),  # 30-second terminal
     ]
     
     for t in other_threads:

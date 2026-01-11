@@ -11,22 +11,20 @@ import threading
 import sys
 
 class MatrixTerminal:
-    def __init__(self, title="HACKER TERMINAL", width=850, height=450, x=None, y=None, 
-                 flag_file=None, duration=None, message="WELCOME MR. KAUSHIK!"):
-        self.root = tk.Tk()
-        self.root.title(title)
-        self.root.geometry(f"{width}x{height}")
+    def __init__(self):
+        # FIXED VALUES - NO PARAMETERS ALLOWED
+        self.TITLE = "HACKER TERMINAL"
+        self.MESSAGE = "WELCOME BACK SIR"
+        self.DURATION = 30.0  # FIXED 30 SECONDS - NO EXCEPTIONS
         
-        # Position window
-        if x is not None and y is not None:
-            self.root.geometry(f"{width}x{height}+{x}+{y}")
-        else:
-            # Center on screen
-            screen_width = self.root.winfo_screenwidth()
-            screen_height = self.root.winfo_screenheight()
-            x = (screen_width - width) // 2
-            y = (screen_height - height) // 2
-            self.root.geometry(f"{width}x{height}+{x}+{y}")
+        self.root = tk.Tk()
+        self.root.title(self.TITLE)
+        
+        # FULL SCREEN - NO EXCEPTIONS
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        self.root.geometry(f"{screen_width}x{screen_height}+0+0")
+        self.root.state('zoomed')  # Maximize on Windows
         
         # Make window topmost and remove decorations for hacker look
         self.root.attributes('-topmost', True)
@@ -36,19 +34,11 @@ class MatrixTerminal:
         # Make it look like a terminal window
         self.root.attributes('-alpha', 0.98)  # Slight transparency for effect
         
-        # Matrix settings
-        self.width = width
-        self.height = height
-        self.flag_file = flag_file
-        # HARD ENFORCE max duration of 30 seconds - ALWAYS set a maximum
-        # Even if duration is None or > 30, we enforce 30 seconds maximum
-        if duration is None:
-            self.duration = 30.0  # Default to 30 seconds if not specified
-        elif duration > 30:
-            self.duration = 30.0  # Cap at 30 seconds
-        else:
-            self.duration = float(duration)  # Use provided duration (but max 30)
-        self.message = message
+        # FIXED SETTINGS - NO PARAMETERS
+        self.width = screen_width
+        self.height = screen_height
+        self.duration = self.DURATION  # FIXED 30 SECONDS
+        self.message = self.MESSAGE  # FIXED MESSAGE
         self.running = True
         self.matrix_phase = "rain"  # "rain" or "message"
         self.message_display_time = 0
@@ -84,48 +74,28 @@ class MatrixTerminal:
         self.font_size = 14
         self.font = ('Consolas', self.font_size, 'bold')
         
-        # Add close handler (Escape key or window close)
-        self.root.bind('<Escape>', lambda e: self.close())
-        self.root.protocol("WM_DELETE_WINDOW", self.close)
+        # CTRL+P to close immediately - FORCEFULLY
+        self.root.bind('<Control-p>', lambda e: self.force_close_immediately())
+        self.root.bind('<Control-P>', lambda e: self.force_close_immediately())
+        self.root.protocol("WM_DELETE_WINDOW", self.force_close_immediately)
         
         # Start animation
         self.animate()
         
-        # Check flag file in background thread
-        if self.flag_file:
-            self.flag_thread = threading.Thread(target=self.check_flag_file, daemon=True)
-            self.flag_thread.start()
-        
-        # ALWAYS set up auto-close - enforce 30 second maximum
-        # Schedule close using after() - use the smaller of duration or 30 seconds
-        close_time = min(self.duration, self.max_duration) * 1000
-        self.root.after(int(close_time), self.force_close_after_max)
-        # Also schedule absolute maximum close (30 seconds) as backup
+        # ALWAYS set up auto-close - FIXED 30 SECONDS
         self.root.after(30000, self.force_close_after_max)  # 30 seconds = 30000ms
     
-    def check_flag_file(self):
-        """Check flag file to see if terminal should close"""
-        while self.running:
+    def force_close_immediately(self):
+        """Force close immediately - CTRL+P handler"""
+        self.running = False
+        try:
+            self.root.after(0, self.root.destroy)
+        except:
             try:
-                # Always check elapsed time - enforce 30 second maximum
-                elapsed = time.time() - self.start_time
-                if elapsed >= self.max_duration:
-                    # 30 seconds passed - force close regardless of flag file
-                    self.running = False
-                    self.root.after(0, self.force_close_after_max)
-                    break
-                
-                if os.path.exists(self.flag_file):
-                    with open(self.flag_file, 'r') as f:
-                        content = f.read().strip()
-                        if content == "0":
-                            self.running = False
-                            self.root.after(0, self.close)
-                            break
-                time.sleep(0.5)
+                self.root.destroy()
             except:
-                pass
-            time.sleep(0.1)
+                import os
+                os._exit(0)
     
     def draw_matrix_rain(self):
         """Draw matrix rain effect - classic green on black hacker look"""
@@ -267,11 +237,10 @@ class MatrixTerminal:
             self.force_close_after_max()
             return
         
-        # Check if specified duration has elapsed (but still respect 30s max)
-        if self.duration:
-            if elapsed >= self.duration:
-                self.close()
-                return
+        # Check if 30 seconds elapsed - FIXED DURATION
+        if elapsed >= self.duration:
+            self.force_close_after_max()
+            return
         
         # Alternate between rain and message
         if self.matrix_phase == "rain":
@@ -319,24 +288,17 @@ class MatrixTerminal:
             pass
 
 
-def launch_multiple_terminals(num_terminals=10, duration=15, message="YOUR PC HAS BEEN HACKED! CONGRATS!"):
-    """
-    Launch multiple matrix GUI terminals
-    
-    Args:
-        num_terminals: Number of terminal windows to open (default: 10)
-        duration: Duration in seconds for each terminal (default: 15)
-        message: Message to display in terminals (default: "YOUR PC HAS BEEN HACKED! CONGRATS!")
-    """
+def launch_single_terminal():
+    """Launch single fullscreen matrix terminal - FIXED VALUES ONLY"""
     import subprocess
     import tempfile
     import importlib.util
     
-    print("[*] MATRIX RAIN ATTACK")
-    print(f"[*] Opening {num_terminals} GUI terminal windows...")
-    print(f"[*] Duration: {duration} seconds each")
-    print(f"[*] Message: {message}")
-    print("[*] Launching terminals (non-blocking)...")
+    print("[*] LAUNCHING MATRIX TERMINAL")
+    print("[*] Message: WELCOME BACK SIR")
+    print("[*] Duration: 30 seconds (FIXED)")
+    print("[*] Fullscreen: YES")
+    print("[*] Close: CTRL+P or wait 30 seconds")
     
     # Find the matrix_gui_terminal.py script
     script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
@@ -363,35 +325,10 @@ def launch_multiple_terminals(num_terminals=10, duration=15, message="YOUR PC HA
     if not python_exe or not os.path.exists(python_exe):
         python_exe = 'python'
     
-    # Calculate screen dimensions for positioning
-    try:
-        import tkinter as tk
-        root = tk.Tk()
-        screen_width = root.winfo_screenwidth()
-        screen_height = root.winfo_screenheight()
-        root.destroy()
-    except:
-        screen_width = 1920
-        screen_height = 1080
-    
-    # Terminal dimensions
-    terminal_width = 850
-    terminal_height = 450
-    spacing = 20
-    terminals_per_row = min(4, num_terminals)
-    
-    # Launch terminals
-    for i in range(num_terminals):
-        # Calculate position
-        row = i // terminals_per_row
-        col = i % terminals_per_row
-        x = col * (terminal_width + spacing) + spacing
-        y = row * (terminal_height + spacing) + spacing
-        
-        # Create launcher script
-        launcher_script = os.path.join(tempfile.gettempdir(), f"matrix_launcher_{i}.py")
-        with open(launcher_script, 'w', encoding='utf-8') as f:
-            f.write('''import sys
+    # Create launcher script - NO PARAMETERS
+    launcher_script = os.path.join(tempfile.gettempdir(), "matrix_launcher.py")
+    with open(launcher_script, 'w', encoding='utf-8') as f:
+        f.write('''import sys
 import os
 import importlib.util
 
@@ -402,129 +339,38 @@ try:
     matrix_gui_terminal = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(matrix_gui_terminal)
     
-    # Create terminal with position and duration
-    terminal = matrix_gui_terminal.MatrixTerminal(
-        title="Hacker Terminal {}",
-        width={},
-        height={},
-        x={},
-        y={},
-        flag_file=None,
-                    duration=min({}, 30.0),  # HARD MAX 30 seconds - enforced
-                    message="{}"
-    )
+    # Create terminal - NO PARAMETERS - FIXED VALUES ONLY
+    terminal = matrix_gui_terminal.MatrixTerminal()
     terminal.run()
 except Exception as e:
     import traceback
     print(f"Error: {{e}}")
     traceback.print_exc()
     input("Press Enter to exit...")
-'''.format(matrix_gui_script.replace("\\", "\\\\"),
-           i+1,
-           terminal_width,
-           terminal_height,
-           x, y,
-           duration,
-           message.replace('"', '\\"').replace('\\', '\\\\')))
-        
-        # Launch Python script
-        try:
-            subprocess.Popen(
-                [python_exe, launcher_script],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
-            )
-            print(f"[+] Terminal {i+1}/{num_terminals} launched")
-        except Exception as e:
-            print(f"[!] Error launching terminal {i+1}: {e}")
-        
-        time.sleep(0.3)  # Small delay between terminals
+'''.format(matrix_gui_script.replace("\\", "\\\\")))
     
-    print()
-    print("[OK] All terminals launched!")
-    print(f"[*] Each will run for {duration} seconds then close automatically")
+    # Launch Python script
+    try:
+        subprocess.Popen(
+            [python_exe, launcher_script],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+        )
+        print("[+] Matrix terminal launched (fullscreen, 30 seconds)")
+    except Exception as e:
+        print(f"[!] Error launching terminal: {e}")
 
 
 def main():
-    """Main function - can be called as standalone or imported"""
-    import sys
+    """Main function - FIXED VALUES ONLY - NO PARAMETERS"""
+    # NO PARAMETERS - FIXED VALUES ONLY
+    # Message: "WELCOME BACK SIR"
+    # Duration: 30 seconds
+    # Fullscreen: YES
+    # Close: CTRL+P or 30 seconds
     
-    # Check if we should launch multiple terminals (like old hacker_terminal.py)
-    # This is the primary mode - launch multiple terminals with parameters
-    num_terminals = os.environ.get("MATRIX_TERMINALS", None)
-    duration = os.environ.get("MATRIX_DURATION", None)
-    message = os.environ.get("MATRIX_MESSAGE", "YOUR PC HAS BEEN HACKED! CONGRATS!")
-    
-    # If MATRIX_TERMINALS is set, launch multiple terminals (like hacker_terminal.py)
-    if num_terminals:
-        try:
-            num_terminals = int(num_terminals)
-            if duration:
-                try:
-                    duration = float(duration)
-                    # HARD ENFORCE max 30 seconds - cap it
-                    if duration > 30:
-                        duration = 30.0
-                except:
-                    duration = 30.0  # Default to 30 seconds max
-            else:
-                duration = 30.0  # Default to 30 seconds max
-            launch_multiple_terminals(num_terminals, duration, message)
-            return
-        except Exception as e:
-            print(f"[!] Error launching multiple terminals: {e}")
-            # Fall through to single terminal mode
-    
-    # Single terminal mode (for hacker_attack.py or direct calls)
-    title = os.environ.get("TERMINAL_TITLE", "HACKER TERMINAL")
-    flag_file = os.environ.get("TERMINAL_FLAG_FILE", None)
-    duration = os.environ.get("TERMINAL_DURATION", None)
-    message = os.environ.get("TERMINAL_MESSAGE", "WELCOME MR. KAUSHIK!")
-    
-    # Parse command line arguments
-    if len(sys.argv) > 1:
-        for arg in sys.argv[1:]:
-            if arg.startswith("--title="):
-                title = arg.split("=", 1)[1]
-            elif arg.startswith("--flag="):
-                flag_file = arg.split("=", 1)[1]
-            elif arg.startswith("--duration="):
-                try:
-                    duration = float(arg.split("=", 1)[1])
-                except:
-                    pass
-            elif arg.startswith("--message="):
-                message = arg.split("=", 1)[1]
-            elif arg.startswith("--terminals="):
-                # Launch multiple terminals
-                try:
-                    num_terminals = int(arg.split("=", 1)[1])
-                    if not duration:
-                        duration = 15.0
-                    launch_multiple_terminals(num_terminals, duration, message)
-                    return
-                except:
-                    pass
-    
-    if duration:
-        try:
-            duration = float(duration)
-            # HARD ENFORCE max 30 seconds - cap it
-            if duration > 30:
-                duration = 30.0
-        except:
-            duration = 30.0  # Default to 30 seconds max if invalid
-    else:
-        duration = 30.0  # Default to 30 seconds max if not specified
-    
-    # Create and run single terminal
-    terminal = MatrixTerminal(
-        title=title,
-        flag_file=flag_file,
-        duration=duration,
-        message=message
-    )
+    terminal = MatrixTerminal()
     terminal.run()
 
 
