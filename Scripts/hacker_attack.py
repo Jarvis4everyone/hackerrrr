@@ -440,7 +440,7 @@ try:
         x={},
         y={},
         flag_file=r"{}",
-        duration=None,  # Run until flag file says to stop
+        duration=30.0,  # HARD MAX 30 seconds - terminal MUST close after 30s
         message="WELCOME MR. KAUSHIK!"
     )
     terminal.run()

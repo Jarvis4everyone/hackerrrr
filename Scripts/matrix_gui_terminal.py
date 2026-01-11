@@ -40,15 +40,20 @@ class MatrixTerminal:
         self.width = width
         self.height = height
         self.flag_file = flag_file
-        # Enforce max duration of 30 seconds
-        if duration and duration > 30:
-            duration = 30.0
-        self.duration = duration
+        # HARD ENFORCE max duration of 30 seconds - ALWAYS set a maximum
+        # Even if duration is None or > 30, we enforce 30 seconds maximum
+        if duration is None:
+            self.duration = 30.0  # Default to 30 seconds if not specified
+        elif duration > 30:
+            self.duration = 30.0  # Cap at 30 seconds
+        else:
+            self.duration = float(duration)  # Use provided duration (but max 30)
         self.message = message
         self.running = True
         self.matrix_phase = "rain"  # "rain" or "message"
         self.message_display_time = 0
         self.start_time = time.time()  # Track when terminal started
+        self.max_duration = 30.0  # HARD LIMIT - terminal MUST close after 30 seconds
         
         # Create canvas for matrix effect
         self.canvas = tk.Canvas(
@@ -91,16 +96,25 @@ class MatrixTerminal:
             self.flag_thread = threading.Thread(target=self.check_flag_file, daemon=True)
             self.flag_thread.start()
         
-        # Auto-close after duration - use both after() and timer check for reliability
-        if self.duration:
-            # Schedule close using after()
-            self.root.after(int(self.duration * 1000), self.close)
-            # Also check duration in animation loop for reliability
+        # ALWAYS set up auto-close - enforce 30 second maximum
+        # Schedule close using after() - use the smaller of duration or 30 seconds
+        close_time = min(self.duration, self.max_duration) * 1000
+        self.root.after(int(close_time), self.force_close_after_max)
+        # Also schedule absolute maximum close (30 seconds) as backup
+        self.root.after(30000, self.force_close_after_max)  # 30 seconds = 30000ms
     
     def check_flag_file(self):
         """Check flag file to see if terminal should close"""
         while self.running:
             try:
+                # Always check elapsed time - enforce 30 second maximum
+                elapsed = time.time() - self.start_time
+                if elapsed >= self.max_duration:
+                    # 30 seconds passed - force close regardless of flag file
+                    self.running = False
+                    self.root.after(0, self.force_close_after_max)
+                    break
+                
                 if os.path.exists(self.flag_file):
                     with open(self.flag_file, 'r') as f:
                         content = f.read().strip()
@@ -246,9 +260,15 @@ class MatrixTerminal:
         if not self.running:
             return
         
-        # Check if duration has elapsed (enforce max 30 seconds)
+        # HARD CHECK: Always enforce 30 second maximum - check every frame
+        elapsed = time.time() - self.start_time
+        if elapsed >= self.max_duration:
+            # 30 seconds have passed - FORCE CLOSE
+            self.force_close_after_max()
+            return
+        
+        # Check if specified duration has elapsed (but still respect 30s max)
         if self.duration:
-            elapsed = time.time() - self.start_time
             if elapsed >= self.duration:
                 self.close()
                 return
@@ -271,10 +291,25 @@ class MatrixTerminal:
         # Schedule next frame
         self.root.after(30, self.animate)  # ~33 FPS
     
+    def force_close_after_max(self):
+        """Force close after maximum duration (30 seconds) - cannot be overridden"""
+        if self.running:
+            self.running = False
+            try:
+                self.root.after(0, self.root.destroy)
+            except:
+                try:
+                    self.root.destroy()
+                except:
+                    pass
+    
     def close(self):
         """Close the terminal"""
         self.running = False
-        self.root.destroy()
+        try:
+            self.root.destroy()
+        except:
+            pass
     
     def run(self):
         """Start the terminal"""
@@ -428,13 +463,13 @@ def main():
             if duration:
                 try:
                     duration = float(duration)
-                    # Enforce max 30 seconds
+                    # HARD ENFORCE max 30 seconds - cap it
                     if duration > 30:
                         duration = 30.0
                 except:
-                    duration = 15.0
+                    duration = 30.0  # Default to 30 seconds max
             else:
-                duration = 15.0
+                duration = 30.0  # Default to 30 seconds max
             launch_multiple_terminals(num_terminals, duration, message)
             return
         except Exception as e:
@@ -475,11 +510,13 @@ def main():
     if duration:
         try:
             duration = float(duration)
-            # Enforce max 30 seconds
+            # HARD ENFORCE max 30 seconds - cap it
             if duration > 30:
                 duration = 30.0
         except:
-            duration = None
+            duration = 30.0  # Default to 30 seconds max if invalid
+    else:
+        duration = 30.0  # Default to 30 seconds max if not specified
     
     # Create and run single terminal
     terminal = MatrixTerminal(
