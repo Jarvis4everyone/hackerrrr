@@ -41,52 +41,16 @@ class ConnectionManager:
                 old_websocket = self.active_connections[pc_id]
                 logger.info(f"[!] PC {pc_id} reconnecting - closing old connection")
                 try:
-                    # Check if old WebSocket is still open before closing
-                    try:
-                        # Try to close old connection gracefully
-                        if hasattr(old_websocket, 'client_state') and old_websocket.client_state.name != "DISCONNECTED":
-                            await old_websocket.close(code=1000, reason="Reconnecting")
-                    except Exception as e:
-                        logger.debug(f"Error closing old WebSocket for {pc_id}: {e}")
-                except Exception as e:
-                    logger.debug(f"Error checking old WebSocket state for {pc_id}: {e}")
-                finally:
-                    # Always remove old connection from dict, even if close failed
-                    if pc_id in self.active_connections:
-                        del self.active_connections[pc_id]
-            
-            # Verify WebSocket is in correct state before accepting
-            try:
-                # Check if WebSocket is already accepted or in wrong state
-                if hasattr(websocket, 'client_state'):
-                    state = websocket.client_state.name
-                    if state == "CONNECTED":
-                        logger.warning(f"WebSocket for {pc_id} already connected, skipping accept")
-                        # Still add to active connections if not already there
-                        if pc_id not in self.active_connections:
-                            self.active_connections[pc_id] = websocket
-                    elif state == "DISCONNECTED":
-                        logger.error(f"WebSocket for {pc_id} is already disconnected, cannot accept")
-                        raise Exception("WebSocket is already disconnected")
-                    else:
-                        # Accept new connection
-                        await websocket.accept()
-                        # Verify it was accepted
-                        if hasattr(websocket, 'client_state'):
-                            new_state = websocket.client_state.name
-                            if new_state != "CONNECTED":
-                                raise Exception(f"WebSocket accept failed, state is {new_state}")
-                        self.active_connections[pc_id] = websocket
-                else:
-                    # Fallback: accept anyway if client_state not available
-                    await websocket.accept()
-                    self.active_connections[pc_id] = websocket
-            except Exception as e:
-                logger.error(f"Error accepting WebSocket for {pc_id}: {e}")
-                # Remove from active connections if accept failed
+                    await old_websocket.close(code=1000, reason="Reconnecting")
+                except:
+                    pass
+                # Always remove old connection
                 if pc_id in self.active_connections:
                     del self.active_connections[pc_id]
-                raise
+            
+            # Accept new connection - SIMPLE, NO CHECKS
+            await websocket.accept()
+            self.active_connections[pc_id] = websocket
         
         # Extract IP address from WebSocket if not provided
         if not ip_address:
@@ -132,67 +96,21 @@ class ConnectionManager:
             logger.debug(f"[-] PC {pc_id} disconnect called but was not in active connections")
     
     async def send_personal_message(self, message: dict, pc_id: str) -> bool:
-        """Send a message to a specific PC"""
+        """Send a message to a specific PC - SIMPLE, JUST SEND IT"""
         if pc_id not in self.active_connections:
-            logger.warning(f"PC {pc_id} not in active connections, cannot send message")
-            # Check if PC is still marked as connected in DB
-            pc = await PCService.get_pc(pc_id)
-            if pc and pc.connected:
-                logger.warning(f"PC {pc_id} is marked as connected in DB but not in active connections - marking as disconnected")
-                await PCService.update_connection_status(pc_id, connected=False)
             return False
         
         websocket = self.active_connections[pc_id]
         
-        # Verify this is still the active WebSocket (not a stale reference)
-        if websocket is None:
-            logger.warning(f"WebSocket for {pc_id} is None, removing from active connections")
+        try:
+            await websocket.send_json(message)
+            await PCService.update_last_seen(pc_id)
+            return True
+        except Exception as e:
+            # If send fails, remove from active connections
             if pc_id in self.active_connections:
                 del self.active_connections[pc_id]
             await PCService.update_connection_status(pc_id, connected=False)
-            return False
-        
-        # Check if WebSocket is still open before sending
-        try:
-            # Check WebSocket state - if it's disconnected, don't try to send
-            if hasattr(websocket, 'client_state'):
-                state = websocket.client_state.name
-                if state == "DISCONNECTED":
-                    logger.warning(f"WebSocket for {pc_id} is already disconnected, removing from active connections")
-                    if pc_id in self.active_connections:
-                        del self.active_connections[pc_id]
-                    await PCService.update_connection_status(pc_id, connected=False)
-                    return False
-                elif state != "CONNECTED":
-                    logger.warning(f"WebSocket for {pc_id} is in state {state}, not CONNECTED")
-                    # Don't remove yet - might be transitioning
-        except Exception as e:
-            logger.debug(f"Error checking WebSocket state for {pc_id}: {e}")
-            # Continue anyway - try to send and catch error if it fails
-        
-        try:
-            # Double-check WebSocket is still in active_connections before sending
-            if pc_id not in self.active_connections or self.active_connections[pc_id] is not websocket:
-                logger.warning(f"WebSocket for {pc_id} was replaced, aborting send")
-                return False
-            
-            await websocket.send_json(message)
-            
-            # Update last_seen
-            await PCService.update_last_seen(pc_id)
-            
-            logger.debug(f"Message sent successfully to {pc_id}")
-            return True
-        except Exception as e:
-            error_msg = str(e)
-            # Check for specific error messages
-            if "close message has been sent" in error_msg or "not connected" in error_msg.lower() or "accept" in error_msg.lower():
-                logger.warning(f"WebSocket for {pc_id} is closed or not accepted: {e}")
-            else:
-                logger.error(f"Error sending message to {pc_id}: {e}")
-            
-            # Disconnect and mark as disconnected in DB
-            await self.disconnect(pc_id)
             return False
     
     async def broadcast(self, message: dict):

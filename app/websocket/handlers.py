@@ -48,29 +48,9 @@ async def handle_websocket_connection(websocket: WebSocket, pc_id: str):
             logger.warning(f"Could not send welcome message to {pc_id}: {e}")
             # Continue anyway - connection is established
         
-        # Verify connection is still valid before starting message loop
-        if not manager.is_connected(pc_id):
-            logger.error(f"Connection for {pc_id} not in active_connections after accept")
-            raise Exception("Connection not properly registered")
-        
-        # Keep connection alive and listen for messages
+        # Keep connection alive and listen for messages - SIMPLE, NO CHECKS
         while True:
             try:
-                # Verify WebSocket is still connected before receiving
-                if not manager.is_connected(pc_id):
-                    logger.warning(f"PC {pc_id} no longer in active connections, breaking message loop")
-                    break
-                
-                # Verify WebSocket state before receiving
-                try:
-                    if hasattr(websocket, 'client_state'):
-                        state = websocket.client_state.name
-                        if state == "DISCONNECTED":
-                            logger.info(f"WebSocket for {pc_id} is disconnected, breaking message loop")
-                            break
-                except:
-                    pass  # Continue if state check fails
-                
                 # Wait for messages from client (heartbeat, status updates, etc.)
                 data = await asyncio.wait_for(
                     websocket.receive_json(),
