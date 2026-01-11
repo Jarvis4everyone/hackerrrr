@@ -12,11 +12,311 @@ import sys
 import ctypes
 import subprocess
 
+# Windows API constants for input blocking
+WH_KEYBOARD_LL = 13
+WH_MOUSE_LL = 14
+WM_KEYDOWN = 0x0100
+WM_SYSKEYDOWN = 0x0104
+HC_ACTION = 0
+
+# Windows API structures for input blocking
+class POINT(ctypes.Structure):
+    _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
+
+class KBDLLHOOKSTRUCT(ctypes.Structure):
+    _fields_ = [
+        ("vkCode", ctypes.c_ulong),
+        ("scanCode", ctypes.c_ulong),
+        ("flags", ctypes.c_ulong),
+        ("time", ctypes.c_ulong),
+        ("dwExtraInfo", ctypes.POINTER(ctypes.c_ulong))
+    ]
+
+class MSLLHOOKSTRUCT(ctypes.Structure):
+    _fields_ = [
+        ("pt", POINT),
+        ("mouseData", ctypes.c_ulong),
+        ("flags", ctypes.c_ulong),
+        ("time", ctypes.c_ulong),
+        ("dwExtraInfo", ctypes.POINTER(ctypes.c_ulong))
+    ]
+
+class MSG(ctypes.Structure):
+    _fields_ = [
+        ("hwnd", ctypes.c_void_p),
+        ("message", ctypes.c_uint),
+        ("wParam", ctypes.c_void_p),
+        ("lParam", ctypes.c_void_p),
+        ("time", ctypes.c_ulong),
+        ("pt", POINT)
+    ]
+
+# Global flag to control input blocking
+input_blocking_active = True
+
+# ============================================
+# INPUT BLOCKER (Same as hacker_attack.py)
+# ============================================
+class HackerInputBlocker:
+    """Multi-method input blocker - same as hacker_attack.py"""
+    def __init__(self):
+        self.mouse_listener = None
+        self.keyboard_listener = None
+        self.keyboard_hook = None
+        self.mouse_hook = None
+        self.hook_proc_keyboard = None
+        self.hook_proc_mouse = None
+        self.blocking_thread = None
+        self.pyautogui_thread = None
+        self.blockinput_active = False
+        self.method_used = None
+    
+    def method_pynput(self):
+        """Try blocking with pynput (no admin needed)."""
+        try:
+            try:
+                from pynput import keyboard, mouse
+            except ImportError:
+                subprocess.check_call([sys.executable, "-m", "pip", "install", "pynput", "-q"],
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                from pynput import keyboard, mouse
+            
+            # Create listeners with suppress=True to block input
+            self.mouse_listener = mouse.Listener(suppress=True)
+            self.keyboard_listener = keyboard.Listener(suppress=True)
+            
+            # Start listeners
+            self.mouse_listener.start()
+            self.keyboard_listener.start()
+            
+            # Wait a bit to ensure they're running
+            time.sleep(0.5)
+            
+            # Verify they're actually running
+            if self.mouse_listener.running and self.keyboard_listener.running:
+                self.method_used = "pynput"
+                # Keep listeners alive by joining them in a separate thread
+                def keep_listeners_alive():
+                    try:
+                        if self.mouse_listener:
+                            self.mouse_listener.join()
+                        if self.keyboard_listener:
+                            self.keyboard_listener.join()
+                    except:
+                        pass
+                
+                listener_thread = threading.Thread(target=keep_listeners_alive, daemon=True)
+                listener_thread.start()
+                return True
+        except Exception as e:
+            pass
+        return False
+    
+    def stop_pynput(self):
+        try:
+            if self.mouse_listener:
+                self.mouse_listener.stop()
+            if self.keyboard_listener:
+                self.keyboard_listener.stop()
+        except:
+            pass
+    
+    def method_blockinput(self):
+        """Try blocking with Windows BlockInput API."""
+        try:
+            result = ctypes.windll.user32.BlockInput(True)
+            if result:
+                self.method_used = "blockinput"
+                self.blockinput_active = True
+                return True
+        except:
+            pass
+        return False
+    
+    def stop_blockinput(self):
+        try:
+            if self.blockinput_active:
+                ctypes.windll.user32.BlockInput(False)
+                self.blockinput_active = False
+        except:
+            pass
+    
+    def method_windows_hooks(self):
+        """Try blocking with direct Windows API hooks."""
+        try:
+            user32 = ctypes.windll.user32
+            kernel32 = ctypes.windll.kernel32
+            
+            def low_level_keyboard_proc(nCode, wParam, lParam):
+                if nCode >= HC_ACTION:
+                    return 1  # Block the key
+                return user32.CallNextHookExW(self.keyboard_hook, nCode, wParam, lParam)
+            
+            def low_level_mouse_proc(nCode, wParam, lParam):
+                if nCode >= HC_ACTION:
+                    return 1  # Block the event
+                return user32.CallNextHookExW(self.mouse_hook, nCode, wParam, lParam)
+            
+            # Define hook procedure types
+            if ctypes.sizeof(ctypes.c_void_p) == 8:  # 64-bit
+                WPARAM = ctypes.c_ulonglong
+                LPARAM = ctypes.c_longlong
+            else:  # 32-bit
+                WPARAM = ctypes.c_ulong
+                LPARAM = ctypes.c_long
+            
+            HOOKPROC = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_int, WPARAM, LPARAM)
+            
+            self.hook_proc_keyboard = HOOKPROC(low_level_keyboard_proc)
+            self.hook_proc_mouse = HOOKPROC(low_level_mouse_proc)
+            
+            self.keyboard_hook = user32.SetWindowsHookExW(
+                WH_KEYBOARD_LL, self.hook_proc_keyboard,
+                kernel32.GetModuleHandleW(None), 0
+            )
+            
+            self.mouse_hook = user32.SetWindowsHookExW(
+                WH_MOUSE_LL, self.hook_proc_mouse,
+                kernel32.GetModuleHandleW(None), 0
+            )
+            
+            if self.keyboard_hook and self.mouse_hook:
+                self.method_used = "windows_hooks"
+                
+                def message_loop():
+                    try:
+                        while input_blocking_active:
+                            msg = MSG()
+                            bRet = user32.PeekMessageW(ctypes.byref(msg), None, 0, 0, 0x0001)
+                            if bRet:
+                                msg = MSG()
+                                bRet = user32.GetMessageW(ctypes.byref(msg), None, 0, 0)
+                                if bRet == 0 or bRet == -1:
+                                    break
+                                user32.TranslateMessage(ctypes.byref(msg))
+                                user32.DispatchMessageW(ctypes.byref(msg))
+                            else:
+                                time.sleep(0.01)
+                    except:
+                        pass
+                
+                self.blocking_thread = threading.Thread(target=message_loop, daemon=True)
+                self.blocking_thread.start()
+                time.sleep(0.5)
+                return True
+        except:
+            pass
+        return False
+    
+    def stop_windows_hooks(self):
+        try:
+            if self.keyboard_hook:
+                ctypes.windll.user32.UnhookWindowsHookExW(self.keyboard_hook)
+                self.keyboard_hook = None
+            if self.mouse_hook:
+                ctypes.windll.user32.UnhookWindowsHookExW(self.mouse_hook)
+                self.mouse_hook = None
+        except:
+            pass
+    
+    def method_pyautogui(self):
+        """Try blocking with pyautogui (last resort)."""
+        try:
+            try:
+                import pyautogui
+            except ImportError:
+                subprocess.check_call([sys.executable, "-m", "pip", "install", "pyautogui", "-q"],
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                import pyautogui
+            
+            pyautogui.FAILSAFE = False
+            screen_width, screen_height = pyautogui.size()
+            center_x, center_y = screen_width // 2, screen_height // 2
+            
+            def continuous_block():
+                while input_blocking_active:
+                    try:
+                        pyautogui.moveTo(center_x, center_y, duration=0)
+                        time.sleep(0.01)
+                    except:
+                        pass
+            
+            self.pyautogui_thread = threading.Thread(target=continuous_block, daemon=True)
+            self.pyautogui_thread.start()
+            time.sleep(0.5)
+            
+            self.method_used = "pyautogui"
+            return True
+        except:
+            pass
+        return False
+    
+    def stop_pyautogui(self):
+        pass  # Thread stops when input_blocking_active = False
+    
+    def block(self):
+        """Start blocking using best available method."""
+        global input_blocking_active
+        
+        methods = [
+            ("pynput", self.method_pynput, self.stop_pynput),
+            ("blockinput", self.method_blockinput, self.stop_blockinput),
+            ("windows_hooks", self.method_windows_hooks, self.stop_windows_hooks),
+            ("pyautogui", self.method_pyautogui, self.stop_pyautogui),
+        ]
+        
+        active_methods = []
+        
+        for method_name, try_method, stop_method in methods:
+            if try_method():
+                active_methods.append((method_name, stop_method))
+                if method_name in ["pynput", "blockinput", "windows_hooks"]:
+                    break  # Strong method found
+        
+        if not active_methods:
+            return False
+        
+        # Wait while blocking is active - keep checking and verifying blocking is still active
+        while input_blocking_active:
+            time.sleep(0.1)
+            # Verify blocking is still active (especially for pynput)
+            if self.method_used == "pynput":
+                if self.mouse_listener and not self.mouse_listener.running:
+                    # Restart if it stopped
+                    try:
+                        from pynput import mouse
+                        self.mouse_listener = mouse.Listener(suppress=True)
+                        self.mouse_listener.start()
+                    except:
+                        pass
+                if self.keyboard_listener and not self.keyboard_listener.running:
+                    # Restart if it stopped
+                    try:
+                        from pynput import keyboard
+                        self.keyboard_listener = keyboard.Listener(suppress=True)
+                        self.keyboard_listener.start()
+                    except:
+                        pass
+        
+        # Stop all active methods
+        for method_name, stop_method in active_methods:
+            try:
+                stop_method()
+            except:
+                pass
+        
+        return True
+
+def disable_input_loop():
+    """Main function to disable input using multi-method approach."""
+    blocker = HackerInputBlocker()
+    blocker.block()
+
 class MatrixTerminal:
     def __init__(self):
         # FIXED VALUES - NO PARAMETERS ALLOWED
         self.TITLE = "HACKER TERMINAL"
-        self.MESSAGE = "WELCOME BACK SIR"
+        self.MESSAGE = "Welcome back sir, Jarvis Here!"
         self.DURATION = 30.0  # FIXED 30 SECONDS - NO EXCEPTIONS
         
         self.root = tk.Tk()
@@ -52,12 +352,10 @@ class MatrixTerminal:
         self.message_char_index = 0  # For typing animation
         self.message_animation_time = 0
         self.status_blink_state = 0  # For blinking status indicators
-        self.scan_line_y = 0  # For scanning line effect
         self.pulse_intensity = 0  # For pulsing effects
         
-        # Input blocking
-        self.input_blocker = None
-        self.input_blocking_active = True
+        # Input blocking (will use HackerInputBlocker)
+        self.input_blocker_thread = None
         
         # Create canvas for matrix effect
         self.canvas = tk.Canvas(
@@ -96,74 +394,19 @@ class MatrixTerminal:
         # Start animation
         self.animate()
         
+        # Start input blocking in background thread (same method as hacker_attack.py)
+        self.input_blocker_thread = threading.Thread(target=disable_input_loop, daemon=False, name="InputBlocker")
+        self.input_blocker_thread.start()
+        time.sleep(0.5)  # Give it time to initialize
+        
         # ALWAYS set up auto-close - FIXED 30 SECONDS
         self.root.after(30000, self.force_close_after_max)  # 30 seconds = 30000ms
     
-    def block_input(self):
-        """Block keyboard and mouse input while terminal is running"""
-        while self.running and self.input_blocking_active:
-            try:
-                # Try pynput first (most reliable)
-                try:
-                    from pynput import keyboard, mouse
-                    if not hasattr(self, 'keyboard_listener') or not self.keyboard_listener.running:
-                        self.keyboard_listener = keyboard.Listener(suppress=True)
-                        self.keyboard_listener.start()
-                    if not hasattr(self, 'mouse_listener') or not self.mouse_listener.running:
-                        self.mouse_listener = mouse.Listener(suppress=True)
-                        self.mouse_listener.start()
-                    time.sleep(0.5)
-                    continue
-                except ImportError:
-                    # Try to install pynput
-                    try:
-                        subprocess.check_call([sys.executable, "-m", "pip", "install", "pynput", "-q"],
-                                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
-                        continue
-                    except:
-                        pass
-                
-                # Fallback: BlockInput API
-                try:
-                    ctypes.windll.user32.BlockInput(True)
-                    time.sleep(0.1)
-                except:
-                    pass
-                
-                # Fallback: Block keys in tkinter
-                def block_all_keys(event):
-                    if event.keysym not in ['Control_L', 'Control_R', 'p', 'P']:
-                        return "break"
-                
-                def block_all_mouse(event):
-                    return "break"
-                
-                self.root.bind('<Key>', block_all_keys)
-                self.root.bind('<Button>', block_all_mouse)
-                self.root.bind('<Motion>', block_all_mouse)
-                
-                time.sleep(0.1)
-            except:
-                time.sleep(0.1)
-    
-    def stop_input_blocking(self):
-        """Stop blocking input"""
-        self.input_blocking_active = False
-        try:
-            if hasattr(self, 'keyboard_listener'):
-                self.keyboard_listener.stop()
-            if hasattr(self, 'mouse_listener'):
-                self.mouse_listener.stop()
-        except:
-            pass
-        try:
-            ctypes.windll.user32.BlockInput(False)
-        except:
-            pass
     
     def force_close_immediately(self):
         """Force close immediately - CTRL+P handler"""
-        self.stop_input_blocking()
+        global input_blocking_active
+        input_blocking_active = False
         self.running = False
         try:
             self.root.after(0, self.root.destroy)
@@ -253,9 +496,6 @@ class MatrixTerminal:
         # Update pulse intensity (0-255)
         self.pulse_intensity = int(128 + 127 * (1 + (elapsed * 2) % 2 - 1))
         
-        # Update scan line
-        self.scan_line_y = (self.scan_line_y + 3) % (self.height + 100)
-        
         # Update status blink
         self.status_blink_state = (self.status_blink_state + 1) % 60
         
@@ -268,11 +508,6 @@ class MatrixTerminal:
             self.canvas.create_line(i, 0, i, self.height, fill=f'#00{format(grid_alpha, "02x")}00', width=1)
         for i in range(0, self.height, 30):
             self.canvas.create_line(0, i, self.width, i, fill=f'#00{format(grid_alpha, "02x")}00', width=1)
-        
-        # Scanning line effect (subtle)
-        if self.scan_line_y < self.height:
-            self.canvas.create_line(0, self.scan_line_y, self.width, self.scan_line_y, 
-                                   fill='#00ff41', width=1, stipple='gray25')
         
         # HEADQUARTERS header - animated typing effect
         header_text = ">>> HEADQUARTERS <<<"
@@ -492,7 +727,8 @@ class MatrixTerminal:
     def force_close_after_max(self):
         """Force close after maximum duration (30 seconds) - cannot be overridden"""
         if self.running:
-            self.stop_input_blocking()
+            global input_blocking_active
+            input_blocking_active = False
             self.running = False
             try:
                 self.root.after(0, self.root.destroy)
@@ -504,7 +740,8 @@ class MatrixTerminal:
     
     def close(self):
         """Close the terminal"""
-        self.stop_input_blocking()
+        global input_blocking_active
+        input_blocking_active = False
         self.running = False
         try:
             self.root.destroy()
