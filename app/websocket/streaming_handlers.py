@@ -27,13 +27,19 @@ async def handle_frontend_stream(websocket: WebSocket, pc_id: str, stream_type: 
         await streaming_service.add_frontend_connection(pc_id, stream_type, websocket)
         
         # Send initial status
+        # Check if PC is actually connected before sending status
+        is_connected = await manager.ensure_connection_synced(pc_id)
         is_streaming = await streaming_service.get_pc_streaming_status(pc_id, stream_type)
         await websocket.send_json({
             "type": "stream_status",
             "stream_type": stream_type,
-            "status": "connected",
-            "pc_streaming": is_streaming
+            "status": "connected" if is_connected else "pc_offline",
+            "pc_streaming": is_streaming,
+            "pc_connected": is_connected
         })
+        
+        if not is_connected:
+            logger.warning(f"[Streaming] Frontend connected for {pc_id} - {stream_type}, but PC is not connected")
         
         # Keep connection alive and listen for messages
         while True:
@@ -46,24 +52,42 @@ async def handle_frontend_stream(websocket: WebSocket, pc_id: str, stream_type: 
                 if message_type == "start_stream":
                     # Frontend requests to start stream
                     # Forward request to PC client
-                    pc_websocket = manager.get_connection(pc_id)
-                    if pc_websocket:
-                        try:
-                            await pc_websocket.send_json({
-                                "type": "start_stream",
-                                "stream_type": stream_type
-                            })
-                            logger.info(f"[Streaming] Start {stream_type} requested for {pc_id}")
-                            await websocket.send_json({
-                                "type": "stream_status",
-                                "stream_type": stream_type,
-                                "status": "starting"
-                            })
-                        except Exception as e:
-                            logger.error(f"[Streaming] Error sending start command: {e}")
+                    # Use ensure_connection_synced to check if PC is actually connected
+                    is_connected = await manager.ensure_connection_synced(pc_id)
+                    if is_connected:
+                        pc_websocket = manager.get_connection(pc_id)
+                        if pc_websocket:
+                            try:
+                                # Use send_personal_message for proper error handling
+                                success = await manager.send_personal_message({
+                                    "type": "start_stream",
+                                    "stream_type": stream_type
+                                }, pc_id)
+                                if success:
+                                    logger.info(f"[Streaming] Start {stream_type} requested for {pc_id}")
+                                    await websocket.send_json({
+                                        "type": "stream_status",
+                                        "stream_type": stream_type,
+                                        "status": "starting"
+                                    })
+                                else:
+                                    logger.warning(f"[Streaming] Failed to send start command to {pc_id} - connection may have closed")
+                                    await websocket.send_json({
+                                        "type": "error",
+                                        "message": f"PC {pc_id} connection lost"
+                                    })
+                            except Exception as e:
+                                logger.error(f"[Streaming] Error sending start command: {e}")
+                                await websocket.send_json({
+                                    "type": "error",
+                                    "message": f"Failed to send start command to PC: {str(e)}"
+                                })
+                        else:
+                            # Connection exists in DB but not in active_connections - might be syncing
+                            logger.warning(f"[Streaming] PC {pc_id} marked as connected but WebSocket not found - may be syncing")
                             await websocket.send_json({
                                 "type": "error",
-                                "message": f"Failed to send start command to PC: {str(e)}"
+                                "message": f"PC {pc_id} connection is syncing, please try again"
                             })
                     else:
                         await websocket.send_json({
@@ -74,20 +98,31 @@ async def handle_frontend_stream(websocket: WebSocket, pc_id: str, stream_type: 
                 elif message_type == "stop_stream":
                     # Frontend requests to stop stream
                     # Forward request to PC client
-                    pc_websocket = manager.get_connection(pc_id)
-                    if pc_websocket:
-                        try:
-                            await pc_websocket.send_json({
-                                "type": "stop_stream",
-                                "stream_type": stream_type
-                            })
-                            logger.info(f"[Streaming] Stop {stream_type} requested for {pc_id}")
-                            # Update status
+                    is_connected = await manager.ensure_connection_synced(pc_id)
+                    if is_connected:
+                        pc_websocket = manager.get_connection(pc_id)
+                        if pc_websocket:
+                            try:
+                                # Use send_personal_message for proper error handling
+                                success = await manager.send_personal_message({
+                                    "type": "stop_stream",
+                                    "stream_type": stream_type
+                                }, pc_id)
+                                if success:
+                                    logger.info(f"[Streaming] Stop {stream_type} requested for {pc_id}")
+                                # Update status regardless of send success
+                                await streaming_service.set_pc_streaming_status(pc_id, stream_type, False)
+                            except Exception as e:
+                                logger.error(f"[Streaming] Error sending stop command: {e}")
+                                # Still update status even if send fails
+                                await streaming_service.set_pc_streaming_status(pc_id, stream_type, False)
+                        else:
+                            # Connection exists in DB but not in active_connections
+                            # Still update status to stop
                             await streaming_service.set_pc_streaming_status(pc_id, stream_type, False)
-                        except Exception as e:
-                            logger.error(f"[Streaming] Error sending stop command: {e}")
-                            # Still update status even if send fails
-                            await streaming_service.set_pc_streaming_status(pc_id, stream_type, False)
+                    else:
+                        # PC not connected, but still update status to stop
+                        await streaming_service.set_pc_streaming_status(pc_id, stream_type, False)
                 
                 elif message_type == "ping":
                     # Heartbeat
