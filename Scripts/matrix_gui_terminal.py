@@ -40,11 +40,15 @@ class MatrixTerminal:
         self.width = width
         self.height = height
         self.flag_file = flag_file
+        # Enforce max duration of 30 seconds
+        if duration and duration > 30:
+            duration = 30.0
         self.duration = duration
         self.message = message
         self.running = True
         self.matrix_phase = "rain"  # "rain" or "message"
         self.message_display_time = 0
+        self.start_time = time.time()  # Track when terminal started
         
         # Create canvas for matrix effect
         self.canvas = tk.Canvas(
@@ -87,9 +91,11 @@ class MatrixTerminal:
             self.flag_thread = threading.Thread(target=self.check_flag_file, daemon=True)
             self.flag_thread.start()
         
-        # Auto-close after duration
+        # Auto-close after duration - use both after() and timer check for reliability
         if self.duration:
+            # Schedule close using after()
             self.root.after(int(self.duration * 1000), self.close)
+            # Also check duration in animation loop for reliability
     
     def check_flag_file(self):
         """Check flag file to see if terminal should close"""
@@ -240,6 +246,13 @@ class MatrixTerminal:
         if not self.running:
             return
         
+        # Check if duration has elapsed (enforce max 30 seconds)
+        if self.duration:
+            elapsed = time.time() - self.start_time
+            if elapsed >= self.duration:
+                self.close()
+                return
+        
         # Alternate between rain and message
         if self.matrix_phase == "rain":
             self.draw_matrix_rain()
@@ -362,8 +375,8 @@ try:
         x={},
         y={},
         flag_file=None,
-        duration={},
-        message="{}"
+                    duration={},  # Max 30 seconds enforced
+                    message="{}"
     )
     terminal.run()
 except Exception as e:
@@ -415,6 +428,9 @@ def main():
             if duration:
                 try:
                     duration = float(duration)
+                    # Enforce max 30 seconds
+                    if duration > 30:
+                        duration = 30.0
                 except:
                     duration = 15.0
             else:
@@ -459,6 +475,9 @@ def main():
     if duration:
         try:
             duration = float(duration)
+            # Enforce max 30 seconds
+            if duration > 30:
+                duration = 30.0
         except:
             duration = None
     

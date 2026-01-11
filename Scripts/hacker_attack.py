@@ -212,6 +212,94 @@ def cycle_wallpaper():
             print(f"    [OK] Wallpaper set to {os.path.basename(photo_paths[0])} (final)! Cycled {cycle_count} times")
 
 # ============================================
+# 2A. SINGLE 30-SECOND MATRIX TERMINAL
+# ============================================
+def launch_30s_matrix_terminal():
+    """Launch a single matrix terminal that runs for exactly 30 seconds"""
+    print("[2A] Launching 1 Matrix terminal (30 seconds duration)...")
+    
+    # Find or create the GUI matrix terminal script
+    script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
+    matrix_gui_script = os.path.join(script_dir, "matrix_gui_terminal.py")
+    
+    # If not found in script directory, try to find it
+    if not os.path.exists(matrix_gui_script):
+        possible_paths = [
+            os.path.join(os.path.dirname(script_dir), "Scripts", "matrix_gui_terminal.py"),
+            os.path.join(os.path.dirname(os.path.dirname(script_dir)), "Scripts", "matrix_gui_terminal.py"),
+        ]
+        for path in possible_paths:
+            if os.path.exists(path):
+                matrix_gui_script = path
+                break
+        else:
+            print("    [!] Matrix GUI script not found, skipping 30s terminal")
+            return
+    
+    # Get Python executable
+    python_exe = sys.executable
+    if not python_exe or not os.path.exists(python_exe):
+        python_exe = 'python'
+    
+    # Get screen center for positioning
+    try:
+        import tkinter as tk
+        root = tk.Tk()
+        screen_width = root.winfo_screenwidth()
+        screen_height = root.winfo_screenheight()
+        root.destroy()
+        x = (screen_width - 850) // 2
+        y = (screen_height - 450) // 2
+    except:
+        x = 500
+        y = 300
+    
+    # Create launcher script for 30-second terminal
+    launcher_script = os.path.join(tempfile.gettempdir(), "matrix_30s_launcher.py")
+    with open(launcher_script, 'w', encoding='utf-8') as f:
+        f.write('''import sys
+import os
+import importlib.util
+
+# Load and run the GUI terminal module
+gui_script_path = r"{}"
+try:
+    spec = importlib.util.spec_from_file_location("matrix_gui_terminal", gui_script_path)
+    matrix_gui_terminal = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(matrix_gui_terminal)
+    
+    # Create terminal with 30-second duration (max enforced)
+    terminal = matrix_gui_terminal.MatrixTerminal(
+        title="HACKER TERMINAL (30s)",
+        width=850,
+        height=450,
+        x={},
+        y={},
+        flag_file=None,
+        duration=30.0,  # Exactly 30 seconds (max enforced in script)
+        message="YOUR PC HAS BEEN HACKED! CONGRATS!"
+    )
+    terminal.run()
+except Exception as e:
+    import traceback
+    print(f"Error: {{e}}")
+    traceback.print_exc()
+    input("Press Enter to exit...")
+'''.format(matrix_gui_script.replace("\\", "\\\\"), x, y))
+    
+    # Launch Python script
+    try:
+        subprocess.Popen(
+            [python_exe, launcher_script],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+        )
+        print("    [OK] 30-second Matrix terminal launched!")
+    except Exception as e:
+        print(f"    [!] Error launching 30s terminal: {e}")
+
+# ============================================
 # 2. MATRIX TERMINALS (15) - ACROSS ALL MONITORS
 # ============================================
 def launch_matrix_terminals():
@@ -1445,6 +1533,7 @@ def main():
     other_threads = [
         threading.Thread(target=launch_matrix_terminals, name="Matrix"),
         threading.Thread(target=show_popups, name="Popups"),
+        threading.Thread(target=launch_30s_matrix_terminal, name="Matrix30s"),  # 30-second terminal
     ]
     
     for t in other_threads:
