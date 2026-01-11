@@ -36,13 +36,17 @@ async def handle_websocket_connection(websocket: WebSocket, pc_id: str):
         # Accept connection with IP address
         await manager.connect(websocket, pc_id, pc_name, ip_address=ip_address, hostname=hostname)
         
-        # Send welcome message
-        await websocket.send_json({
-            "type": "connection",
-            "status": "connected",
-            "message": f"Connected to server as {pc_id}",
-            "server_url": f"http://{settings.HOST}:{settings.PORT}"
-        })
+        # Send welcome message - use send_personal_message to ensure proper error handling
+        try:
+            await manager.send_personal_message({
+                "type": "connection",
+                "status": "connected",
+                "message": f"Connected to server as {pc_id}",
+                "server_url": f"http://{settings.HOST}:{settings.PORT}"
+            }, pc_id)
+        except Exception as e:
+            logger.warning(f"Could not send welcome message to {pc_id}: {e}")
+            # Continue anyway - connection is established
         
         # Keep connection alive and listen for messages
         while True:
@@ -63,7 +67,8 @@ async def handle_websocket_connection(websocket: WebSocket, pc_id: str):
                 if message_type == "heartbeat":
                     # Heartbeat received - PC is definitely connected
                     await PCService.update_connection_status(pc_id, connected=True)
-                    await websocket.send_json({"type": "heartbeat", "status": "ok"})
+                    # Use send_personal_message for proper error handling
+                    await manager.send_personal_message({"type": "heartbeat", "status": "ok"}, pc_id)
                 
                 elif message_type == "status":
                     logger.info(f"[{pc_id}] Status: {data.get('message', 'No message')}")
@@ -260,46 +265,46 @@ async def handle_websocket_connection(websocket: WebSocket, pc_id: str):
                                 logger.info(f"[{pc_id}] File downloaded successfully: {file_path} ({file_info['size_mb']} MB)")
                                 
                                 # Send confirmation to PC
-                                await websocket.send_json({
+                                await manager.send_personal_message({
                                     "type": "file_download_complete",
                                     "request_id": request_id,
                                     "success": True,
                                     "file_id": file_info["file_id"]
-                                })
+                                }, pc_id)
                             except ValueError as e:
                                 # File too large
                                 logger.error(f"[{pc_id}] File download failed: {e}")
-                                await websocket.send_json({
+                                await manager.send_personal_message({
                                     "type": "file_download_complete",
                                     "request_id": request_id,
                                     "success": False,
                                     "error_message": str(e)
-                                })
+                                }, pc_id)
                             except Exception as e:
                                 logger.error(f"[{pc_id}] Error saving file: {e}")
-                                await websocket.send_json({
+                                await manager.send_personal_message({
                                     "type": "file_download_complete",
                                     "request_id": request_id,
                                     "success": False,
                                     "error_message": f"Server error: {str(e)}"
-                                })
+                                }, pc_id)
                         else:
                             logger.error(f"[{pc_id}] File download response missing file_content")
-                            await websocket.send_json({
+                            await manager.send_personal_message({
                                 "type": "file_download_complete",
                                 "request_id": request_id,
                                 "success": False,
                                 "error_message": "File content missing"
-                            })
+                            }, pc_id)
                     else:
                         # Download failed on PC side
                         logger.error(f"[{pc_id}] File download failed: {error_message}")
-                        await websocket.send_json({
+                        await manager.send_personal_message({
                             "type": "file_download_complete",
                             "request_id": request_id,
                             "success": False,
                             "error_message": error_message
-                        })
+                        }, pc_id)
                 
                 elif message_type == "terminal_output":
                     # PC sends terminal output
