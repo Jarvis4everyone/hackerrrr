@@ -144,6 +144,14 @@ class ConnectionManager:
         
         websocket = self.active_connections[pc_id]
         
+        # Verify this is still the active WebSocket (not a stale reference)
+        if websocket is None:
+            logger.warning(f"WebSocket for {pc_id} is None, removing from active connections")
+            if pc_id in self.active_connections:
+                del self.active_connections[pc_id]
+            await PCService.update_connection_status(pc_id, connected=False)
+            return False
+        
         # Check if WebSocket is still open before sending
         try:
             # Check WebSocket state - if it's disconnected, don't try to send
@@ -155,11 +163,19 @@ class ConnectionManager:
                         del self.active_connections[pc_id]
                     await PCService.update_connection_status(pc_id, connected=False)
                     return False
+                elif state != "CONNECTED":
+                    logger.warning(f"WebSocket for {pc_id} is in state {state}, not CONNECTED")
+                    # Don't remove yet - might be transitioning
         except Exception as e:
             logger.debug(f"Error checking WebSocket state for {pc_id}: {e}")
             # Continue anyway - try to send and catch error if it fails
         
         try:
+            # Double-check WebSocket is still in active_connections before sending
+            if pc_id not in self.active_connections or self.active_connections[pc_id] is not websocket:
+                logger.warning(f"WebSocket for {pc_id} was replaced, aborting send")
+                return False
+            
             await websocket.send_json(message)
             
             # Update last_seen
