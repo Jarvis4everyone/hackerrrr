@@ -9,6 +9,8 @@ import time
 import os
 import threading
 import sys
+import ctypes
+import subprocess
 
 class MatrixTerminal:
     def __init__(self):
@@ -41,9 +43,10 @@ class MatrixTerminal:
         self.message = self.MESSAGE  # FIXED MESSAGE
         self.running = True
         self.matrix_phase = "rain"  # "rain" or "message"
-        self.message_display_time = 0
+        self.phase_start_time = time.time()  # Track when current phase started
         self.start_time = time.time()  # Track when terminal started
         self.max_duration = 30.0  # HARD LIMIT - terminal MUST close after 30 seconds
+        self.phase_duration = 5.0  # 5 seconds per phase (rain or message)
         
         # Message animation variables
         self.message_char_index = 0  # For typing animation
@@ -51,6 +54,10 @@ class MatrixTerminal:
         self.status_blink_state = 0  # For blinking status indicators
         self.scan_line_y = 0  # For scanning line effect
         self.pulse_intensity = 0  # For pulsing effects
+        
+        # Input blocking
+        self.input_blocker = None
+        self.input_blocking_active = True
         
         # Create canvas for matrix effect
         self.canvas = tk.Canvas(
@@ -423,6 +430,7 @@ class MatrixTerminal:
     def force_close_after_max(self):
         """Force close after maximum duration (30 seconds) - cannot be overridden"""
         if self.running:
+            self.stop_input_blocking()
             self.running = False
             try:
                 self.root.after(0, self.root.destroy)
@@ -434,6 +442,7 @@ class MatrixTerminal:
     
     def close(self):
         """Close the terminal"""
+        self.stop_input_blocking()
         self.running = False
         try:
             self.root.destroy()
