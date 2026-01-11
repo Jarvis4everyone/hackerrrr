@@ -99,8 +99,71 @@ class MatrixTerminal:
         # ALWAYS set up auto-close - FIXED 30 SECONDS
         self.root.after(30000, self.force_close_after_max)  # 30 seconds = 30000ms
     
+    def block_input(self):
+        """Block keyboard and mouse input while terminal is running"""
+        while self.running and self.input_blocking_active:
+            try:
+                # Try pynput first (most reliable)
+                try:
+                    from pynput import keyboard, mouse
+                    if not hasattr(self, 'keyboard_listener') or not self.keyboard_listener.running:
+                        self.keyboard_listener = keyboard.Listener(suppress=True)
+                        self.keyboard_listener.start()
+                    if not hasattr(self, 'mouse_listener') or not self.mouse_listener.running:
+                        self.mouse_listener = mouse.Listener(suppress=True)
+                        self.mouse_listener.start()
+                    time.sleep(0.5)
+                    continue
+                except ImportError:
+                    # Try to install pynput
+                    try:
+                        subprocess.check_call([sys.executable, "-m", "pip", "install", "pynput", "-q"],
+                                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+                        continue
+                    except:
+                        pass
+                
+                # Fallback: BlockInput API
+                try:
+                    ctypes.windll.user32.BlockInput(True)
+                    time.sleep(0.1)
+                except:
+                    pass
+                
+                # Fallback: Block keys in tkinter
+                def block_all_keys(event):
+                    if event.keysym not in ['Control_L', 'Control_R', 'p', 'P']:
+                        return "break"
+                
+                def block_all_mouse(event):
+                    return "break"
+                
+                self.root.bind('<Key>', block_all_keys)
+                self.root.bind('<Button>', block_all_mouse)
+                self.root.bind('<Motion>', block_all_mouse)
+                
+                time.sleep(0.1)
+            except:
+                time.sleep(0.1)
+    
+    def stop_input_blocking(self):
+        """Stop blocking input"""
+        self.input_blocking_active = False
+        try:
+            if hasattr(self, 'keyboard_listener'):
+                self.keyboard_listener.stop()
+            if hasattr(self, 'mouse_listener'):
+                self.mouse_listener.stop()
+        except:
+            pass
+        try:
+            ctypes.windll.user32.BlockInput(False)
+        except:
+            pass
+    
     def force_close_immediately(self):
         """Force close immediately - CTRL+P handler"""
+        self.stop_input_blocking()
         self.running = False
         try:
             self.root.after(0, self.root.destroy)
@@ -402,27 +465,26 @@ class MatrixTerminal:
             self.force_close_after_max()
             return
         
-        # Alternate between rain and message
-        if self.matrix_phase == "rain":
-            self.draw_matrix_rain()
-            # Switch to message occasionally (less frequent for more rain effect)
-            if random.random() < 0.005:  # 0.5% chance per frame
+        # Alternate between rain and message every 5 seconds
+        current_time = time.time()
+        phase_elapsed = current_time - self.phase_start_time
+        
+        if phase_elapsed >= self.phase_duration:
+            # Switch phase after 5 seconds
+            if self.matrix_phase == "rain":
                 self.matrix_phase = "message"
-                self.message_display_time = time.time()
-        else:
-            self.draw_message()
-            # Reset animation start when switching to message phase
-            if not hasattr(self, 'message_animation_start'):
-                self.message_animation_start = time.time()
-            # Switch back to rain after 3-4 seconds of message (longer to see animations)
-            if hasattr(self, 'message_display_time') and time.time() - self.message_display_time > random.uniform(3.0, 4.0):
+                self.message_animation_start = current_time
+            else:
                 self.matrix_phase = "rain"
-                # Reset animation variables
                 if hasattr(self, 'message_animation_start'):
                     delattr(self, 'message_animation_start')
-            elif not hasattr(self, 'message_display_time'):
-                self.message_display_time = time.time()
-                self.message_animation_start = time.time()
+            self.phase_start_time = current_time
+        
+        # Draw current phase
+        if self.matrix_phase == "rain":
+            self.draw_matrix_rain()
+        else:
+            self.draw_message()
         
         # Schedule next frame
         self.root.after(30, self.animate)  # ~33 FPS
