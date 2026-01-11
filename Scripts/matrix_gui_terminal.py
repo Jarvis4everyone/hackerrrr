@@ -410,7 +410,7 @@ try:
         x={},
         y={},
         flag_file=None,
-                    duration={},  # Max 30 seconds enforced
+                    duration=min({}, 30.0),  # HARD MAX 30 seconds - enforced
                     message="{}"
     )
     terminal.run()
