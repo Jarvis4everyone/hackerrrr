@@ -50,8 +50,8 @@ class MatrixTerminal:
             self.root,
             bg='black',
             highlightthickness=0,
-            width=width,
-            height=height
+            width=self.width,
+            height=self.height
         )
         self.canvas.pack(fill=tk.BOTH, expand=True)
         
@@ -59,7 +59,7 @@ class MatrixTerminal:
         self.chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%^&*アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン"
         
         # Matrix columns
-        self.num_columns = width // 10  # Adjust based on font size
+        self.num_columns = self.width // 10  # Adjust based on font size
         self.columns = []
         self.column_speeds = []
         self.column_positions = []
