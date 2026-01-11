@@ -350,6 +350,9 @@ def create_error_screen():
         except Exception as e:
             print(f"[!] Could not generate QR code: {e}")
     
+    # Get screen dimensions for proper positioning
+    screen_width = root.winfo_screenwidth()
+    
     # QR code display (bottom left)
     if qr_image:
         qr_label = tk.Label(
@@ -374,9 +377,17 @@ def create_error_screen():
         )
         qr_label.pack(expand=True)
     
-    # Stop code info (bottom left, next to QR code)
+    # Stop code info (bottom left, next to QR code with small gap)
+    # QR code is at relx=0.08 (8% from left), 120px wide
+    # Calculate pixel position: QR code starts at screen_width * 0.08, ends at screen_width * 0.08 + 120
+    # Text should start right after QR code with small gap (30px for realistic look)
+    qr_left_px = screen_width * 0.08
+    qr_width_px = 120
+    text_start_px = qr_left_px + qr_width_px + 30  # 30px gap after QR code (realistic spacing)
+    text_relx = text_start_px / screen_width  # Convert to relative position
+    
     stop_code_frame = tk.Frame(root, bg='#0078D7')
-    stop_code_frame.place(relx=0.25, rely=0.78, anchor='w')
+    stop_code_frame.place(relx=text_relx, rely=0.78, anchor='w')
     
     stop_code_label = tk.Label(
         stop_code_frame,

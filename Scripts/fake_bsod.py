@@ -154,13 +154,13 @@ def create_bsod():
         qr_frame.place(relx=0.05, rely=0.75, anchor='nw')
         qr_frame.pack_propagate(False)
     
-    # Stop code info - place directly to the right of QR code
+    # Stop code info - place directly to the right of QR code with small gap
     # QR code is at relx=0.05 (5% from left), 200px wide
     # Calculate pixel position: QR code starts at screen_width * 0.05, ends at screen_width * 0.05 + 200
-    # Text should start right after QR code (screen_width * 0.05 + 200 + 20px gap)
+    # Text should start right after QR code with small gap (30px for realistic look)
     qr_left_px = screen_width * 0.05
     qr_width_px = 200
-    text_start_px = qr_left_px + qr_width_px + 20  # 20px gap after QR code
+    text_start_px = qr_left_px + qr_width_px + 30  # 30px gap after QR code (realistic spacing)
     text_relx = text_start_px / screen_width  # Convert to relative position
     
     stop_code = tk.Label(
