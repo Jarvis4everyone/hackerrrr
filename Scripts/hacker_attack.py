@@ -149,6 +149,7 @@ def cycle_wallpaper():
     """Cycle through Photos/1.jpg to Photos/9.jpg continuously during attack"""
     global input_blocking_active
     print("[1] Cycling wallpaper through Photos folder (1.jpg to 9.jpg)...")
+    sys.stdout.flush()  # Ensure output is visible
     
     photos_folder = find_photos_folder()
     
@@ -170,6 +171,7 @@ def cycle_wallpaper():
         search_paths = [p for p in search_paths if p is not None]
         for p in search_paths:
             print(f"      - {p}")
+        sys.stdout.flush()
         return
     
     photo_paths = get_photo_paths(photos_folder)
@@ -180,23 +182,39 @@ def cycle_wallpaper():
         return
     
     print(f"    [*] Found {len(photo_paths)} photos in Photos folder")
+    sys.stdout.flush()
     
     # Cycle through photos continuously while attack is running
     cycle_count = 0
     photo_index = 0
     
+    # Set first wallpaper immediately
+    if photo_paths:
+        try:
+            set_wallpaper(photo_paths[0])
+            print(f"    [*] Set initial wallpaper: {os.path.basename(photo_paths[0])}")
+            sys.stdout.flush()
+        except Exception as e:
+            print(f"    [!] Error setting initial wallpaper: {e}")
+            sys.stdout.flush()
+    
     while input_blocking_active:
         if photo_paths:
-            # Set wallpaper to current photo
-            current_photo = photo_paths[photo_index]
-            set_wallpaper(current_photo)
-            
-            # Move to next photo (cycle back to 0 after 8)
-            photo_index = (photo_index + 1) % len(photo_paths)
-            cycle_count += 1
-            
-            # Small delay between changes
-            time.sleep(0.5)
+            try:
+                # Set wallpaper to current photo
+                current_photo = photo_paths[photo_index]
+                set_wallpaper(current_photo)
+                
+                # Move to next photo (cycle back to 0 after 8)
+                photo_index = (photo_index + 1) % len(photo_paths)
+                cycle_count += 1
+                
+                # Small delay between changes
+                time.sleep(0.5)
+            except Exception as e:
+                print(f"    [!] Error cycling wallpaper: {e}")
+                sys.stdout.flush()
+                time.sleep(0.5)  # Continue even if one fails
         else:
             break
     
@@ -583,6 +601,7 @@ Add-Type -AssemblyName System.Windows.Forms
 
 def show_popups():
     print("[7] Showing HACKER popup messages on ALL monitors...")
+    sys.stdout.flush()  # Ensure output is visible
     
     popups = [
         ("BREACH DETECTED", "Firewall bypassed. System compromised."),
@@ -599,6 +618,7 @@ def show_popups():
     
     monitors = get_all_monitors()
     print("    [*] Found %d monitor(s)" % len(monitors))
+    sys.stdout.flush()
     
     for i, (title, message) in enumerate(popups, 1):
         # Distribute popups across all monitors
@@ -767,6 +787,7 @@ $form.Show()
         time.sleep(0.5)
     
     print("    [OK] 10 hacker popups distributed across all monitors!")
+    sys.stdout.flush()
 
 # ============================================
 # 8. DISABLE INPUT (Multi-Method, 100% Reliable)
@@ -1129,6 +1150,7 @@ def restore_everything():
     print("\n" + "=" * 60)
     print("   RESTORING SYSTEM...")
     print("=" * 60)
+    sys.stdout.flush()  # Ensure output is visible
     
     # Stop input blocking
     print("[*] Re-enabling input...")
@@ -1151,16 +1173,30 @@ def restore_everything():
         t.join(timeout=3)
     
     print("    [OK] All terminals and popups closed!")
+    sys.stdout.flush()
     
     # Show taskbar
     print("[*] Showing taskbar...")
-    show_taskbar()
+    sys.stdout.flush()
+    try:
+        show_taskbar()
+        print("    [OK] Taskbar restored!")
+    except Exception as e:
+        print(f"    [!] Error restoring taskbar: {e}")
+    sys.stdout.flush()
     
     # Show desktop icons
     print("[*] Showing desktop icons...")
-    show_desktop_icons()
+    sys.stdout.flush()
+    try:
+        show_desktop_icons()
+        print("    [OK] Desktop icons restored!")
+    except Exception as e:
+        print(f"    [!] Error restoring desktop icons: {e}")
+    sys.stdout.flush()
     
     print("\n[OK] System restored!")
+    sys.stdout.flush()
 
 # ============================================
 # MAIN - RUN EVERYTHING SIMULTANEOUSLY
@@ -1195,29 +1231,35 @@ def main():
     hide_desktop_icons()
     hide_taskbar()
     # Start wallpaper cycling in background (it will continue)
-    wallpaper_thread = threading.Thread(target=cycle_wallpaper, name="Wallpaper")
+    wallpaper_thread = threading.Thread(target=cycle_wallpaper, name="Wallpaper", daemon=False)
     wallpaper_thread.start()
-    time.sleep(0.3)
+    time.sleep(0.5)  # Give wallpaper thread time to start and find photos
     
     # SIXTH: Start other effects in parallel (popups) while audio plays
     print("[*] Starting popups...")
-    other_threads = [
-        threading.Thread(target=show_popups, name="Popups"),
-    ]
-    
-    for t in other_threads:
-        t.start()
-        time.sleep(0.1)
+    popup_thread = threading.Thread(target=show_popups, name="Popups", daemon=False)
+    popup_thread.start()
+    time.sleep(0.5)  # Give popups time to start
     
     # Wait for Audio thread to complete - ATTACK STOPS IMMEDIATELY WHEN AUDIO ENDS
     audio_thread.join()  # Wait for audio to finish (~38 seconds)
     
-    # Audio has ended - STOP ATTACK IMMEDIATELY (no waiting for other threads)
+    # Audio has ended - STOP ATTACK IMMEDIATELY
     print("\n[*] Audio ended - stopping attack immediately...")
     input_blocking_active = False
     
-    # Small delay to ensure threads see the flag change
-    time.sleep(0.5)
+    # Give wallpaper and popup threads a moment to finish their current operations
+    time.sleep(1.0)
+    
+    # Wait for wallpaper thread to finish (it should exit when input_blocking_active = False)
+    if wallpaper_thread.is_alive():
+        print("[*] Waiting for wallpaper thread to finish...")
+        wallpaper_thread.join(timeout=2.0)
+    
+    # Wait for popup thread to finish
+    if popup_thread.is_alive():
+        print("[*] Waiting for popup thread to finish...")
+        popup_thread.join(timeout=1.0)
     
     # RESTORE EVERYTHING IMMEDIATELY
     restore_everything()
