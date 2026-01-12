@@ -417,11 +417,25 @@ async def handle_websocket_connection(websocket: WebSocket, pc_id: str):
                 continue
             
             except WebSocketDisconnect:
+                logger.info(f"[{pc_id}] WebSocket disconnected normally")
                 break
             
             except Exception as e:
+                # Log error but don't break connection immediately
+                # Some errors are recoverable (e.g., JSON decode errors)
+                error_str = str(e)
                 logger.error(f"Error handling message from {pc_id}: {e}")
-                break
+                
+                # Only break on critical errors that indicate connection is truly broken
+                # Connection errors, SSL errors, etc. should break the loop
+                if any(critical in error_str.lower() for critical in [
+                    'connection', 'ssl', 'closed', 'broken', 'reset', 
+                    'aborted', 'timeout', 'network'
+                ]):
+                    logger.warning(f"[{pc_id}] Critical connection error detected, closing connection")
+                    break
+                # For other errors (JSON decode, etc.), continue listening
+                continue
                 
     except WebSocketDisconnect:
         pass

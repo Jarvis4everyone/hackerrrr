@@ -10,7 +10,12 @@ import time
 import threading
 
 # Duration in seconds (default 30, max 300)
-DURATION = min(int(os.environ.get("BSOD_DURATION", "30")), 300)
+# Handle empty string or invalid values
+bsod_duration_str = os.environ.get("BSOD_DURATION", "30")
+try:
+    DURATION = min(int(bsod_duration_str) if bsod_duration_str.strip() else 30, 300)
+except (ValueError, AttributeError):
+    DURATION = 30  # Default to 30 seconds if invalid
 
 print("=" * 50)
 print("   FAKE BSOD")
