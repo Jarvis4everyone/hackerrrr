@@ -316,7 +316,7 @@ class MatrixTerminal:
     def __init__(self):
         # FIXED VALUES - NO PARAMETERS ALLOWED
         self.TITLE = "HACKER TERMINAL"
-        self.MESSAGE = "Welcome back sir, Jarvis Here!"
+        self.MESSAGE = "Welcome back Sir, Mr Happy here!"
         self.DURATION = 30.0  # FIXED 30 SECONDS - NO EXCEPTIONS
         
         self.root = tk.Tk()
